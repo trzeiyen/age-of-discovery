@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#091d24">
+<meta name="author" content="Zeiyen 老師">
 <title>大航海時代</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,7 +61,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
 .turn.on{background:var(--brass);color:var(--brass-ink);border-color:var(--brass)}
 #helm{position:relative;width:128px;height:128px;touch-action:none;user-select:none;-webkit-user-select:none}
 #helm svg{width:100%;height:100%;display:block}
-#wheel{transform-origin:50% 50%}
 .helm-read{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%;background:var(--sea-deep);border:2px solid var(--brass);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;pointer-events:none}
 .helm-read b{font-size:15px;font-variant-numeric:tabular-nums}
 .helm-read span{font-size:12px;color:var(--brass)}
@@ -121,9 +121,22 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
 .hero{padding:26px 24px 8px;display:grid;gap:6px}
 .hero .era{font-size:13px;letter-spacing:.3em;color:var(--brass)}
 .hero h1{margin:0;font-family:var(--f-display);font-weight:900;font-size:clamp(40px,7vw,64px);letter-spacing:.12em;line-height:1.1}
+.credit{font-size:13px;color:var(--muted);letter-spacing:.06em}
+.credit b{color:var(--brass);font-weight:700}
 .hero p{margin:4px 0 0;color:var(--muted);line-height:1.7;max-width:60ch}
 .form-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .field{display:flex;flex-direction:column;gap:6px}
+.field input[hidden]{display:none}
+.field select{background:var(--sea-deep);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:18px;color:var(--text);min-width:0}
+.field select.err{border-color:var(--bad)}
+.modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mode{text-align:left;background:var(--sea-deep);border:2px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.mode[aria-pressed="true"]{border-color:var(--brass);background:var(--panel-2)}
+.mode b{font-family:var(--f-display);font-size:20px}
+.mode span{font-size:13px;color:var(--muted);line-height:1.55}
+.school-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.field .hint{font-size:12px;color:var(--muted);line-height:1.5}
+@media (max-width:760px){.school-row{grid-template-columns:1fr}}
 .field input{background:var(--sea-deep);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:18px;color:var(--text);min-width:0}
 .field input.err{border-color:var(--bad)}
 .err-msg{color:var(--bad);font-size:13px;min-height:1em}
@@ -291,11 +304,24 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
       <div class="hero">
         <span class="era">西元 1630 年 · 航向福爾摩沙</span>
         <h1>大航海時代</h1>
+        <div class="credit"><b>Zeiyen 老師</b>製作</div>
         <p>你是一位歐洲船長，帶著 1500 枚金幣從家鄉出航。乘著信風、季風繞過非洲，到亞洲買賣香料、絲綢、瓷器和臺灣的鹿皮。三年後，看誰賺得最多！</p>
       </div>
       <div class="sheet-body">
+        <span class="lbl">選擇挑戰模式</span>
+        <div class="modes" id="modes">
+          <button class="mode" data-mode="local" aria-pressed="false"><b>本機挑戰</b><span>成績只記在這台平板上，適合課堂練習。</span></button>
+          <button class="mode" data-mode="inter" aria-pressed="false"><b>校際挑戰</b><span>成績上傳到線上排行榜，和其他學校的同學一起比賽。</span></button>
+        </div>
+        <div class="school-row" id="schoolBox" hidden>
+          <label class="field"><span class="lbl">所在行政區</span><select id="pDistrict"></select></label>
+          <label class="field"><span class="lbl">學制</span><select id="pLevel"><option value="">請選擇</option><option>國小</option><option>國中</option><option>高中職</option><option>大學</option></select></label>
+          <label class="field"><span class="lbl">校名英文簡稱</span><select id="pAbbr"></select>
+            <input id="pAbbrOther" maxlength="10" autocomplete="off" autocapitalize="characters" placeholder="例如：TYK" hidden>
+            <span class="hint" id="abbrHint" hidden>只填學校名稱的英文簡稱，用大寫英文字母，不用加「國小」「國中」。</span></label>
+        </div>
         <div class="form-row">
-          <label class="field"><span class="lbl">班級（三碼，如 501）</span><input id="pCls" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="501"></label>
+          <label class="field"><span class="lbl" id="clsLabel">班級（三碼，如 501）</span><input id="pCls" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="501"></label>
           <label class="field"><span class="lbl">座號</span><input id="pSeat" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="12"></label>
           <label class="field"><span class="lbl">船長綽號（最多 8 字）</span><input id="pNick" maxlength="8" autocomplete="off" placeholder="海上小勇士"></label>
         </div>
@@ -331,7 +357,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
 /* =================== 設定 =================== */
 const CFG = {
   // 部署到 GitHub Pages 後，把 Google Apps Script 網頁應用程式網址貼在這裡，排行榜就會變成全班共用
-  GAS_URL: '',
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbwBDPOTw8d8S2mEkbhaWyClq2HMgKXs5akuW85xLIfkFiASsYxIq3QkEK5B5QU8m32lng/exec',
+  // 校際挑戰：各行政區的學校英文簡稱預設選項（沒列到的行政區只有「其他」可自行輸入）
+  SCHOOL_ABBRS: { '新北市': ['TYK'] },
   START: Date.UTC(1630, 2, 1),   // 1630 年 3 月 1 日出航
   TOTAL_DAYS: 1096,              // 三年
   DAY_PER_SEC: 1.5,              // 真實 1 秒 = 遊戲 1.5 天
@@ -1211,7 +1239,7 @@ function openPause(){
   modal='pause';confirmEnd=false;input.turn=0;renderPause();showOverlay('pause');
 }
 function renderPause(){
-  $('#pauseSheet').innerHTML=`<div class="sheet-head"><div><h2>暫停</h2><div class="sub">${esc(S.player.cls)} 班 ${esc(S.player.seat)} 號・${esc(S.player.nick)}・${NATION[S.nation].name}</div></div></div>
+  $('#pauseSheet').innerHTML=`<div class="sheet-head"><div><h2>暫停</h2><div class="sub">${esc(S.player.school||'')} ${esc(S.player.cls)} 班 ${esc(S.player.seat)} 號・${esc(S.player.nick)}・${NATION[S.nation].name}</div></div></div>
     <div class="sheet-body"><div class="statline"><span>金幣 <b>${fmt(S.gold)}</b></span><span>目前獲利 <b>${fmt(S.gold-CFG.START_GOLD)}</b></span><span>知識卡 <b>${cardCount()}/${TOTAL_CARDS}</b></span></div>
     ${confirmEnd?`<div class="result no">確定要現在結算嗎？船上 ${cargoUsed()} 箱沒賣掉的貨物不會算進獲利。</div>`:'<div class="note">提早結算會直接以目前的金幣計算獲利。</div>'}</div>
     <div class="sheet-foot">${confirmEnd?'<button class="btn" data-act="back">再想想</button><button class="btn danger" data-act="end">確定結算</button>':'<button class="btn danger" data-act="ask">提早結算</button><button class="btn primary" data-act="resume">繼續航行</button>'}</div>`;
@@ -1235,13 +1263,13 @@ function endGame(){
   save(); renderEnd(); showOverlay('end');
   if(!S.submitted) submitScore();
 }
-function record(){return {cls:S.player.cls,seat:S.player.seat,nick:S.player.nick,nation:NATION[S.nation].name,profit:Math.round(S.gold-CFG.START_GOLD),cards:cardCount(),days:Math.min(CFG.TOTAL_DAYS,Math.floor(S.day)),ts:Date.now()};}
+function record(){return {school:S.player.school||'',cls:S.player.cls,seat:S.player.seat,nick:S.player.nick,nation:NATION[S.nation].name,profit:Math.round(S.gold-CFG.START_GOLD),cards:cardCount(),days:Math.min(CFG.TOTAL_DAYS,Math.floor(S.day)),ts:Date.now()};}
 let submitState='';
 async function submitScore(){
   const rec=record();
   const local=lsGet(CFG.BOARD_KEY)||[];local.push(rec);lsSet(CFG.BOARD_KEY,local.slice(-300));
   S.submitted=true;save();
-  if(CFG.GAS_URL){
+  if(CFG.GAS_URL&&S.player.mode==='inter'){
     submitState='uploading';renderEnd();
     try{await fetch(CFG.GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(rec)});submitState='ok';}
     catch(e){submitState='fail';}
@@ -1250,8 +1278,8 @@ async function submitScore(){
 }
 function renderEnd(){
   const profit=Math.round(S.gold-CFG.START_GOLD), left=cargoUsed();
-  const msg={uploading:'正在上傳成績…',ok:'成績已上傳到班級排行榜。',fail:'上傳失敗，成績已存在這台平板上。請告訴老師。',local:'成績已記錄在這台平板的排行榜。'}[submitState]||'';
-  $('#endSheet').innerHTML=`<div class="sheet-head"><div><h2>航程結束</h2><div class="sub">${dateStr(Math.min(S.day,CFG.TOTAL_DAYS))}・${esc(S.player.cls)} 班 ${esc(S.player.seat)} 號 ${esc(S.player.nick)}</div></div></div>
+  const msg={uploading:'正在上傳成績…',ok:'成績已上傳到校際挑戰排行榜。',fail:'上傳失敗，成績已存在這台平板上。請告訴老師。',local:S.player.mode==='inter'?'尚未設定線上排行榜，成績先記錄在這台平板上。':'本機挑戰：成績已記錄在這台平板的排行榜。'}[submitState]||'';
+  $('#endSheet').innerHTML=`<div class="sheet-head"><div><h2>航程結束</h2><div class="sub">${dateStr(Math.min(S.day,CFG.TOTAL_DAYS))}・${esc(S.player.school||'')} ${esc(S.player.cls)} 班 ${esc(S.player.seat)} 號 ${esc(S.player.nick)}</div></div></div>
     <div class="sheet-body">
       <div><span class="lbl">總獲利</span><div class="big" style="color:${profit>=0?'var(--brass)':'var(--bad)'}">${profit>=0?'+':''}${fmt(profit)}</div></div>
       <div class="statline"><span>最後金幣 <b>${fmt(S.gold)}</b></span><span>知識卡 <b>${cardCount()}/${TOTAL_CARDS}</b></span><span>航行 <b>${fmt(S.distNm)}</b> 海里</span><span>造訪港口 <b>${Object.keys(S.visited).length}</b> 個</span>${left?`<span style="color:var(--bad)">沒賣掉的貨物 <b>${left}</b> 箱</span>`:''}</div>
@@ -1262,7 +1290,7 @@ function renderEnd(){
         <li>在你的航程中，風向和季節怎麼影響了你的路線？</li>
       </ol></div>
     </div>
-    <div class="sheet-foot"><button class="btn" data-act="log">我的知識卡</button><button class="btn" data-act="board">排行榜</button><button class="btn primary" data-act="again">再玩一次</button></div>`;
+    <div class="sheet-foot"><span class="credit" style="margin-right:auto;align-self:center">遊戲製作：<b>Zeiyen 老師</b></span><button class="btn" data-act="log">我的知識卡</button><button class="btn" data-act="board">排行榜</button><button class="btn primary" data-act="again">再玩一次</button></div>`;
 }
 $('#endSheet').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;const a=b.dataset.act;
@@ -1277,25 +1305,31 @@ async function openBoard(){
   boardTab=(S&&S.player)?'class':'all';
   renderBoard();showOverlay('board');
   let rows=null;
-  if(CFG.GAS_URL){try{const r=await fetch(CFG.GAS_URL+'?action=list');const j=await r.json();if(Array.isArray(j.rows)){rows=j.rows;boardSrc='online';}}catch(e){}}
+  if(CFG.GAS_URL&&!(S&&S.player&&S.player.mode!=='inter')){try{const r=await fetch(CFG.GAS_URL+'?action=list');const j=await r.json();if(Array.isArray(j.rows)){rows=j.rows;boardSrc='online';}}catch(e){}}
   if(!rows){rows=lsGet(CFG.BOARD_KEY)||[];boardSrc='local';}
   boardData=rows;renderBoard();
 }
 function renderBoard(){
   const me=S&&S.player;
+  const same=(a,b)=>String(a||'')===String(b||'');
   let list='<div class="note">讀取中…</div>';
   if(boardData){
     const best={};
-    for(const r of boardData){const key=r.cls+'-'+r.seat;const pv=Number(r.profit)||0;if(!best[key]||pv>Number(best[key].profit))best[key]=r;}
+    for(const r of boardData){const key=(r.school||'')+'|'+r.cls+'-'+r.seat;const pv=Number(r.profit)||0;if(!best[key]||pv>Number(best[key].profit))best[key]=r;}
     let rows=Object.values(best);
-    if(boardTab==='class'&&me) rows=rows.filter(r=>String(r.cls)===String(me.cls));
+    if(boardTab==='class'&&me) rows=rows.filter(r=>same(r.school,me.school)&&same(r.cls,me.cls));
+    if(boardTab==='school'&&me) rows=rows.filter(r=>same(r.school,me.school));
     rows.sort((a,b)=>Number(b.profit)-Number(a.profit));
-    rows=rows.slice(0,40);
-    list=rows.length?`<div style="overflow-x:auto"><table class="board"><thead><tr><th>名次</th><th>班級座號</th><th>船長</th><th>國家</th><th class="r">知識卡</th><th class="r">獲利</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${me&&String(r.cls)===String(me.cls)&&String(r.seat)===String(me.seat)?'me':''}"><td class="rank">${i+1}</td><td>${esc(r.cls)}-${esc(r.seat)}</td><td>${esc(r.nick)}</td><td>${esc(r.nation||'')}</td><td class="r">${esc(r.cards||0)}</td><td class="r"><b>${fmt(Number(r.profit)||0)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="note">還沒有成績。完成一次航程後就會出現在這裡。</div>';
+    rows=rows.slice(0,50);
+    const showSchool=boardTab==='all';
+    list=rows.length?`<div style="overflow-x:auto"><table class="board"><thead><tr><th>名次</th>${showSchool?'<th>學校</th>':''}<th>班級座號</th><th>船長</th><th>國家</th><th class="r">知識卡</th><th class="r">獲利</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${me&&same(r.school,me.school)&&same(r.cls,me.cls)&&same(r.seat,me.seat)?'me':''}"><td class="rank">${i+1}</td>${showSchool?`<td>${esc(r.school||'—')}</td>`:''}<td>${esc(r.cls)}-${esc(r.seat)}</td><td>${esc(r.nick)}</td><td>${esc(r.nation||'')}</td><td class="r">${esc(r.cards||0)}</td><td class="r"><b>${fmt(Number(r.profit)||0)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="note">還沒有成績。完成一次航程後就會出現在這裡。</div>';
   }
   const src=boardSrc==='online'?'線上排行榜（每位同學取最好的一次）':'這台裝置上的排行榜'+(CFG.GAS_URL?'（連不上線上排行榜）':'（尚未設定線上排行榜網址）');
-  $('#boardSheet').innerHTML=`<div class="sheet-head"><div><h2>排行榜</h2><div class="sub">${src}</div></div><button class="chip-btn close" data-act="close">關閉</button></div>
-    <div class="tabs">${me?`<button data-tab="class" class="${boardTab==='class'?'on':''}">本班 ${esc(me.cls)}</button>`:''}<button data-tab="all" class="${boardTab==='all'?'on':''}">全部</button></div>
+  const tabs=[];
+  if(me){tabs.push(['class',`本班 ${esc(me.cls)}`]);if(me.school)tabs.push(['school',`本校 ${esc(me.abbr||me.school)}`]);}
+  tabs.push(['all',me&&me.mode!=='inter'?'這台平板全部':'校際挑戰']);
+  $('#boardSheet').innerHTML=`<div class="sticky-top"><div class="sheet-head"><div><h2>排行榜</h2><div class="sub">${src}</div></div><button class="chip-btn close" data-act="close">關閉</button></div>
+    <div class="tabs">${tabs.map(([k,n])=>`<button data-tab="${k}" class="${boardTab===k?'on':''}">${n}</button>`).join('')}</div></div>
     <div class="sheet-body">${list}</div>`;
 }
 $('#boardSheet').addEventListener('click',e=>{
@@ -1316,16 +1350,36 @@ function renderNations(){
 }
 $('#nations').addEventListener('click',e=>{const b=e.target.closest('[data-n]');if(!b)return;chosenNation=b.dataset.n;renderNations();});
 const BAD_WORDS=['幹','靠北','白痴','白癡','智障','屁','死','笨蛋','fuck','shit'];
+const DISTRICTS=['臺北市','新北市','桃園市','臺中市','臺南市','高雄市','基隆市','新竹市','嘉義市','新竹縣','苗栗縣','彰化縣','南投縣','雲林縣','嘉義縣','屏東縣','宜蘭縣','花蓮縣','臺東縣','澎湖縣','金門縣','連江縣'];
+// 各學制的班級第一碼（年級）範圍
+const LEVEL_GRADES={'國小':[1,6,'501'],'國中':[7,9,'701'],'高中職':[1,3,'101'],'大學':[1,4,'101']};
+let chosenMode='';
+function clsRule(){const lv=chosenMode==='inter'?$('#pLevel').value:'國小';return LEVEL_GRADES[lv]||LEVEL_GRADES['國小'];}
+function updateClsLabel(){const r=clsRule();$('#clsLabel').textContent=`班級（三碼，如 ${r[2]}）`;$('#pCls').placeholder=r[2];}
 function readPlayer(){
   const cls=$('#pCls').value.trim(), seat=$('#pSeat').value.trim(), nick=$('#pNick').value.trim().replace(/\s+/g,'');
-  for(const id of['pCls','pSeat','pNick'])$('#'+id).classList.remove('err');
-  let err='';
-  if(!/^[1-6](0[1-9]|[1-9][0-9])$/.test(cls)){err='班級請輸入三碼數字，例如 501（年級 1–6 加上班號）。';$('#pCls').classList.add('err');}
-  else if(!/^[0-9]{1,2}$/.test(seat)||+seat<1||+seat>40){err='座號請輸入 1 到 40。';$('#pSeat').classList.add('err');}
-  else if(!nick){err='請幫你的船長取一個綽號。';$('#pNick').classList.add('err');}
-  else if(BAD_WORDS.some(w=>nick.toLowerCase().includes(w))){err='換一個友善的綽號吧！';$('#pNick').classList.add('err');}
+  for(const id of['pDistrict','pLevel','pAbbr','pAbbrOther','pCls','pSeat','pNick'])$('#'+id).classList.remove('err');
+  let err='', district='', level='', abbr='';
+  if(!chosenMode) err='請先選擇「本機挑戰」或「校際挑戰」。';
+  else if(chosenMode==='inter'){
+    district=$('#pDistrict').value; level=$('#pLevel').value;
+    abbr=$('#pAbbr').value==='__other'?$('#pAbbrOther').value.trim().toUpperCase():$('#pAbbr').value;
+    if(!district){err='請選擇學校所在的行政區。';$('#pDistrict').classList.add('err');}
+    else if(!level){err='請選擇學制。';$('#pLevel').classList.add('err');}
+    else if(!$('#pAbbr').value){err='請選擇校名英文簡稱。';$('#pAbbr').classList.add('err');}
+    else if(!/^[A-Z]{2,10}$/.test(abbr)){err='校名簡稱請輸入 2 到 10 個大寫英文字母，例如 TYK。';$('#pAbbrOther').classList.add('err');}
+  }
+  if(!err){
+    const [g0,g1,ex]=clsRule(); const re=new RegExp(`^[${g0}-${g1}](0[1-9]|[1-9][0-9])$`);
+    if(!re.test(cls)){err=`班級請輸入三碼數字，例如 ${ex}（年級 ${g0}–${g1} 加上班號）。`;$('#pCls').classList.add('err');}
+    else if(!/^[0-9]{1,2}$/.test(seat)||+seat<1||+seat>60){err='座號請輸入 1 到 60。';$('#pSeat').classList.add('err');}
+    else if(!nick){err='請幫你的船長取一個綽號。';$('#pNick').classList.add('err');}
+    else if(BAD_WORDS.some(w=>nick.toLowerCase().includes(w))){err='換一個友善的綽號吧！';$('#pNick').classList.add('err');}
+  }
   $('#pErr').textContent=err;
-  return err?null:{cls,seat:String(+seat),nick:nick.slice(0,8)};
+  if(err) return null;
+  const school=chosenMode==='inter'?`${district}・${level}・${abbr}`:'';
+  return {mode:chosenMode,district,level,abbr,school,cls,seat:String(+seat),nick:nick.slice(0,8)};
 }
 function beginPlay(){
   screen='play';modal=null;
@@ -1348,10 +1402,38 @@ $('#bBoard1').onclick=()=>{
   boardTab='all';
   (async()=>{renderBoard();$('#board').hidden=false;let rows=null;if(CFG.GAS_URL){try{const r=await fetch(CFG.GAS_URL+'?action=list');const j=await r.json();if(Array.isArray(j.rows)){rows=j.rows;boardSrc='online';}}catch(e){}}if(!rows){rows=lsGet(CFG.BOARD_KEY)||[];boardSrc='local';}boardData=rows;renderBoard();})();
 };
+function renderSchoolField(){
+  $('#pDistrict').innerHTML='<option value="">請選擇</option>'+DISTRICTS.map(d=>`<option>${d}</option>`).join('');
+  renderAbbrOptions();
+}
+function abbrList(){return CFG.SCHOOL_ABBRS[$('#pDistrict').value]||[];}
+function renderAbbrOptions(){
+  const list=abbrList();
+  $('#pAbbr').innerHTML=(list.length?'<option value="">請選擇</option>':'')+list.map(a=>`<option>${esc(a)}</option>`).join('')+'<option value="__other">其他（自行輸入）</option>';
+  syncAbbrOther();
+}
+function syncAbbrOther(){const o=$('#pAbbr').value==='__other';$('#pAbbrOther').hidden=!o;$('#abbrHint').hidden=!o;}
+function renderModes(){
+  document.querySelectorAll('#modes .mode').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===chosenMode)));
+  $('#schoolBox').hidden=chosenMode!=='inter';
+  updateClsLabel();
+}
+$('#modes').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b)return;chosenMode=b.dataset.mode;renderModes();$('#pErr').textContent='';});
+$('#pLevel').addEventListener('change',updateClsLabel);
+$('#pAbbr').addEventListener('change',()=>{syncAbbrOther();if($('#pAbbr').value==='__other')$('#pAbbrOther').focus();});
+$('#pDistrict').addEventListener('change',renderAbbrOptions);
+$('#pAbbrOther').addEventListener('input',e=>{const el=e.target,v=el.value.toUpperCase().replace(/[^A-Z]/g,'');if(v!==el.value)el.value=v;});
 (function initStart(){
+  renderSchoolField();
+  renderModes();
   renderNations();
   const s=lsGet(CFG.SAVE_KEY);
   if(s&&!s.ended&&s.player){const b=$('#bResume');b.hidden=false;b.textContent=`繼續航程（${s.player.cls}-${s.player.seat} ${s.player.nick}・${dateStr(s.day)}）`;
+    chosenMode=s.player.mode||'local';
+    if(s.player.mode==='inter'){$('#pDistrict').value=s.player.district;$('#pLevel').value=s.player.level;renderAbbrOptions();
+      if(abbrList().includes(s.player.abbr))$('#pAbbr').value=s.player.abbr;else{$('#pAbbr').value='__other';$('#pAbbrOther').value=s.player.abbr||'';}
+      syncAbbrOther();}
+    renderModes();
     $('#pCls').value=s.player.cls;$('#pSeat').value=s.player.seat;$('#pNick').value=s.player.nick;chosenNation=s.nation;renderNations();}
 })();
 
