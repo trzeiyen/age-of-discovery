@@ -1,0 +1,1374 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#091d24">
+<title>大航海時代</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
+<style>
+/* 版面：全螢幕海圖為底，上方儀表列、下方舵輪／帆力／風向，其餘介面以浮層卡片出現（平板橫向優先） */
+:root{
+  --sea:#0f2c35; --sea-deep:#091d24; --sea-line:#2f5961;
+  --vellum:#e4d5ae; --vellum-ink:#4a3a22;
+  --brass:#e3a83c; --brass-ink:#2b1d05;
+  --text:#eef2ec; --muted:#9db4b1;
+  --panel:#11272e; --panel-2:#183540; --line:#2c4d55;
+  --good:#63c48f; --bad:#ec6d60; --warn:#f0c15a;
+  --pt:#3fa070; --es:#d6493e; --nl:#ef8c30; --jp:#a98ad8; --local:#7fa9b8; --none:#8f9a96;
+  --f-display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--sea-deep);color:var(--text);font-family:var(--f-body);font-size:15px;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+#app{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);overflow:hidden}
+#map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+.lbl{font-size:12px;letter-spacing:.08em;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+
+/* 儀表列 */
+.hud{position:absolute;left:0;right:0;top:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:10px 16px;background:linear-gradient(to bottom,rgba(9,29,36,.92),rgba(9,29,36,.6) 70%,rgba(9,29,36,0));pointer-events:none}
+.hud>*{pointer-events:auto}
+.hud-date{display:flex;flex-direction:column;line-height:1.2}
+.hud-date b{font-family:var(--f-display);font-size:18px;font-weight:900;letter-spacing:.04em}
+.hud-date span{font-size:12px;color:var(--warn)}
+.hud-stat{display:flex;flex-direction:column;line-height:1.2}
+.hud-stat b{font-size:18px;font-variant-numeric:tabular-nums}
+.hud-stat.gold b{color:var(--brass)}
+.hud-bar{display:grid;grid-template-columns:auto 72px auto;align-items:center;gap:6px}
+.hud-bar i{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
+.hud-bar em{display:block;height:100%;width:100%;background:var(--good);border-radius:4px;transition:width .3s}
+.hud-bar b{font-size:13px;font-variant-numeric:tabular-nums;min-width:3.2em}
+.hud-btns{margin-left:auto;display:flex;gap:8px}
+.chip-btn{background:rgba(17,39,46,.85);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px;min-height:40px}
+.chip-btn:active{background:var(--panel-2)}
+
+#tgt{position:absolute;top:64px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:rgba(9,29,36,.85);border:1px solid var(--brass);border-radius:999px;padding:6px 8px 6px 14px;font-size:14px;white-space:nowrap;max-width:calc(100% - 32px)}
+#tgt span{overflow:hidden;text-overflow:ellipsis}
+#tgt button{background:none;border:0;color:var(--muted);font-size:13px;padding:4px 8px}
+
+/* 下方控制區 */
+#ctrl{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:12px 16px 14px;background:linear-gradient(to top,rgba(9,29,36,.92),rgba(9,29,36,.55) 70%,rgba(9,29,36,0));pointer-events:none}
+#ctrl>*{pointer-events:auto}
+.helm-wrap{display:flex;align-items:center;gap:8px}
+.turn{width:56px;height:56px;border-radius:50%;background:rgba(17,39,46,.9);border:1px solid var(--line);font-size:13px;user-select:none;-webkit-user-select:none}
+.turn.on{background:var(--brass);color:var(--brass-ink);border-color:var(--brass)}
+#helm{position:relative;width:128px;height:128px;touch-action:none;user-select:none;-webkit-user-select:none}
+#helm svg{width:100%;height:100%;display:block}
+#wheel{transform-origin:50% 50%}
+.helm-read{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%;background:var(--sea-deep);border:2px solid var(--brass);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;pointer-events:none}
+.helm-read b{font-size:15px;font-variant-numeric:tabular-nums}
+.helm-read span{font-size:12px;color:var(--brass)}
+.sail{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(17,39,46,.85);border:1px solid var(--line);border-radius:16px;padding:8px 12px}
+.sail-row{display:flex;align-items:center;gap:10px}
+.sail-row button{width:48px;height:44px;border-radius:12px;background:var(--panel-2);border:1px solid var(--line);font-size:22px;line-height:1}
+.sail-row b{font-size:20px;min-width:3em;text-align:center;font-variant-numeric:tabular-nums}
+.sail .sub{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sailbar{width:100%;height:5px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden}
+.sailbar em{display:block;height:100%;background:var(--vellum)}
+.wind{display:flex;align-items:center;gap:10px;background:rgba(17,39,46,.85);border:1px solid var(--line);border-radius:16px;padding:8px 14px 8px 8px;max-width:300px}
+.wind svg{width:58px;height:58px;flex:none}
+.wind div{display:flex;flex-direction:column;line-height:1.35;min-width:0}
+.wind b{font-size:15px}
+#hZone{font-size:13px;color:var(--brass)}
+#hTip{font-size:12px;color:var(--muted)}
+#hTip.bad{color:var(--bad)} #hTip.good{color:var(--good)}
+
+#dockBtn{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);background:var(--brass);color:var(--brass-ink);border:0;border-radius:999px;padding:14px 26px;font-size:18px;font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,.45);animation:bob 1.6s ease-in-out infinite;white-space:nowrap}
+#dockBtn.no{background:var(--panel-2);color:var(--muted);animation:none}
+@keyframes bob{50%{transform:translate(-50%,-4px)}}
+
+#toasts{position:absolute;left:50%;top:108px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;width:min(520px,calc(100% - 32px));pointer-events:none;z-index:5}
+.toast{background:rgba(9,29,36,.94);border:1px solid var(--line);border-left:4px solid var(--brass);border-radius:10px;padding:10px 14px;font-size:14px;line-height:1.5;box-shadow:0 6px 18px rgba(0,0,0,.35);animation:tin .25s ease-out}
+.toast.bad{border-left-color:var(--bad)} .toast.good{border-left-color:var(--good)} .toast.learn{border-left-color:var(--jp)}
+@keyframes tin{from{opacity:0;transform:translateY(-6px)}}
+
+/* 浮層 */
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(5,16,20,.62);z-index:10}
+.sheet{width:min(820px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column}
+.sheet-head{position:sticky;top:0;z-index:1;background:var(--panel);padding:18px 20px 12px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px}
+.sheet-head h2{margin:0;font-family:var(--f-display);font-weight:900;font-size:26px;letter-spacing:.04em;text-wrap:balance}
+.sheet-head .sub{font-size:13px;color:var(--muted);margin-top:2px}
+.sheet-head .close{margin-left:auto}
+.sheet-body{padding:16px 20px 20px;display:flex;flex-direction:column;gap:14px}
+.sheet-foot{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:12px 20px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.btn{border-radius:12px;padding:12px 20px;font-size:16px;font-weight:700;min-height:48px;border:1px solid var(--line);background:var(--panel-2)}
+.btn.primary{background:var(--brass);color:var(--brass-ink);border-color:var(--brass)}
+.btn.danger{background:transparent;border-color:var(--bad);color:var(--bad)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.tabs{display:flex;gap:6px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:12px 14px;font-size:15px;color:var(--muted);white-space:nowrap}
+.tabs button.on{color:var(--text);border-bottom-color:var(--brass);font-weight:700}
+.note{font-size:13px;color:var(--muted);line-height:1.6}
+#log,#board{z-index:11}
+.sticky-top{position:sticky;top:0;z-index:2;background:var(--panel)}
+.sticky-top .sheet-head,.sticky-top .tabs{position:static}
+.quick{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:rgba(227,168,60,.12);border:1px solid var(--brass);border-radius:12px;padding:10px 12px}
+.quick span{font-size:14px;flex:1 1 180px}
+.quick .btn{min-height:44px;padding:8px 14px;font-size:15px}
+.statline{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:14px}
+.statline b{font-variant-numeric:tabular-nums}
+
+/* 開始畫面 */
+#start .sheet{width:min(900px,100%)}
+.hero{padding:26px 24px 8px;display:grid;gap:6px}
+.hero .era{font-size:13px;letter-spacing:.3em;color:var(--brass)}
+.hero h1{margin:0;font-family:var(--f-display);font-weight:900;font-size:clamp(40px,7vw,64px);letter-spacing:.12em;line-height:1.1}
+.hero p{margin:4px 0 0;color:var(--muted);line-height:1.7;max-width:60ch}
+.form-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field input{background:var(--sea-deep);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:18px;color:var(--text);min-width:0}
+.field input.err{border-color:var(--bad)}
+.err-msg{color:var(--bad);font-size:13px;min-height:1em}
+.nations{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.nation{text-align:left;background:var(--sea-deep);border:2px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.nation[aria-pressed="true"]{border-color:var(--brass);background:var(--panel-2)}
+.nation b{font-family:var(--f-display);font-size:20px;display:flex;align-items:center;gap:8px}
+.nation span{font-size:13px;color:var(--muted);line-height:1.55}
+.rules{margin:0;padding-left:1.2em;color:var(--muted);line-height:1.8;font-size:14px}
+.rules b{color:var(--text)}
+
+/* 市場 */
+.market{display:flex;flex-direction:column;gap:8px}
+.mrow{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,.8fr)) auto;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--sea-deep);border:1px solid transparent}
+.mrow.cheap{border-color:rgba(227,168,60,.5)}
+.mrow .g{display:flex;align-items:center;gap:10px;min-width:0}
+.mrow .g b{font-size:16px}
+.mrow .g small{display:block;font-size:12px;color:var(--muted);line-height:1.4}
+.sw{width:14px;height:14px;border-radius:4px;flex:none;border:1px solid rgba(255,255,255,.25)}
+.mcell{display:flex;flex-direction:column;font-variant-numeric:tabular-nums;line-height:1.3}
+.mcell small{font-size:11px;color:var(--muted)}
+.mcell b{font-size:16px}
+.up{color:var(--good)} .down{color:var(--bad)}
+.mbtns{display:grid;grid-template-columns:repeat(4,auto);gap:6px}
+.mbtns button{min-width:52px;min-height:42px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);font-size:14px;padding:0 8px}
+.mbtns button.b{border-color:rgba(99,196,143,.6)}
+.mbtns button.s{border-color:rgba(227,168,60,.6)}
+.mbtns button:disabled{opacity:.3}
+.mhead{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,.8fr)) auto;gap:10px;padding:0 12px;font-size:12px;color:var(--muted)}
+.mhead span:last-child{width:236px}
+.svc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.svc-card{background:var(--sea-deep);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.svc-card h3{margin:0;font-size:17px}
+.meter{height:10px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden}
+.meter em{display:block;height:100%;background:var(--good)}
+
+/* 知識卡 */
+.story{background:var(--vellum);color:var(--vellum-ink);border-radius:14px;padding:18px 20px;line-height:1.85;font-size:16px}
+.pimg{display:block;width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:10px;margin:0 0 12px;background:rgba(74,58,34,.12);max-width:100%}
+.card .pimg{margin:0}
+.story .pimg{max-height:min(240px,32vh)}
+.story h3{margin:0 0 6px;font-family:var(--f-display);font-size:20px;font-weight:900}
+.quiz{display:flex;flex-direction:column;gap:10px}
+.quiz .q{font-size:17px;font-weight:700;line-height:1.6}
+.quiz button.opt{text-align:left;background:var(--sea-deep);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:16px;min-height:52px}
+.quiz button.opt.right{border-color:var(--good);background:rgba(99,196,143,.15)}
+.quiz button.opt.wrong{border-color:var(--bad);background:rgba(236,109,96,.12)}
+.result{border-radius:12px;padding:12px 14px;line-height:1.7;font-size:15px}
+.result.ok{background:rgba(99,196,143,.15);border:1px solid var(--good)}
+.result.no{background:rgba(236,109,96,.12);border:1px solid var(--bad)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{background:var(--sea-deep);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card.got{background:var(--vellum);color:var(--vellum-ink);border-color:var(--vellum)}
+.card.got .muted{color:#6d5a3a}
+.card h4{margin:0;font-family:var(--f-display);font-size:18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card p{margin:0;font-size:14px;line-height:1.7}
+.card .muted{color:var(--muted);font-size:12px}
+.card .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:auto}
+.card button{border-radius:10px;border:1px solid currentColor;background:transparent;padding:6px 12px;font-size:13px;min-height:36px}
+
+/* 結算與排行榜 */
+.big{font-family:var(--f-display);font-size:clamp(40px,8vw,64px);font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.board th,.board td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);font-size:15px}
+.board th{font-size:12px;color:var(--muted);font-weight:500}
+.board td.r{text-align:right} .board th.r{text-align:right}
+.board tr.me td{background:rgba(227,168,60,.14)}
+.rank{font-family:var(--f-display);font-weight:900;color:var(--brass)}
+.reflect{margin:0;padding-left:1.3em;line-height:1.9}
+
+@media (max-width:760px){
+  .hud{gap:4px 12px;padding:8px 12px}
+  .hud-bar{grid-template-columns:auto 44px auto}
+  .hud .lbl{font-size:11px}
+  .hud-date b,.hud-stat b{font-size:15px}
+  .hud-btns{margin-left:0;width:100%}
+  .chip-btn{padding:6px 12px;min-height:36px;font-size:13px}
+  #tgt{top:112px}
+  #toasts{top:150px}
+  #helm{width:100px;height:100px}
+  .helm-read{width:48px;height:48px}
+  .turn{width:46px;height:46px;font-size:12px}
+  .wind{display:none}
+  .helm-wrap{gap:4px}
+  .sail{padding:6px 8px}
+  .sail-row{gap:6px}
+  .sail-row button{width:38px;height:40px;font-size:19px}
+  .sail-row b{font-size:16px;min-width:2.6em}
+  #ctrl{gap:6px}
+  #ctrl{padding:8px 12px 10px}
+  #dockBtn{bottom:130px}
+  .form-row,.nations{grid-template-columns:1fr}
+  .form-row{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .mrow,.mhead{grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,.7fr))}
+  .mhead span:last-child{display:none}
+  .mbtns{grid-column:1/-1;grid-template-columns:repeat(4,minmax(0,1fr))}
+  .svc{grid-template-columns:1fr}
+  .sheet-head h2{font-size:22px}
+}
+@media (prefers-reduced-motion:reduce){ #dockBtn{animation:none} .toast{animation:none} }
+</style>
+</head>
+<body>
+
+
+<div id="app">
+  <canvas id="map" aria-label="航海圖：點港口可設為目的地"></canvas>
+
+  <header class="hud" id="hud" hidden>
+    <div class="hud-date"><b id="hDate">1630年3月1日</b><span id="hLeft" class="num">剩 1096 天</span></div>
+    <div class="hud-stat gold"><span class="lbl">金幣</span><b id="hGold">1500</b></div>
+    <div class="hud-stat"><span class="lbl">貨艙</span><b id="hCargo">0/50</b></div>
+    <div class="hud-bar"><span class="lbl">補給</span><i><em id="hSupBar"></em></i><b id="hSup">100%</b></div>
+    <div class="hud-bar"><span class="lbl">船體</span><i><em id="hHullBar"></em></i><b id="hHull">100%</b></div>
+    <div class="hud-btns">
+      <button class="chip-btn" id="bZoom">視野：近</button>
+      <button class="chip-btn" id="bLog">航海日誌</button>
+      <button class="chip-btn" id="bPause">暫停</button>
+    </div>
+  </header>
+
+  <div id="tgt" hidden><span id="tgtText"></span><button id="tgtClear" aria-label="取消目的地">取消</button></div>
+  <div id="toasts" aria-live="polite"></div>
+  <button id="dockBtn" hidden></button>
+
+  <div id="ctrl" hidden>
+    <div class="helm-wrap">
+      <button class="turn" id="tL" aria-label="向左轉舵">◀ 左</button>
+      <div id="helm" aria-label="拖轉方向盤操舵">
+        <svg viewBox="-60 -60 120 120" aria-hidden="true">
+          <g id="wheel">
+            <g stroke="#b07a3a" stroke-width="5" stroke-linecap="round">
+              <line x1="0" y1="-56" x2="0" y2="56"/><line x1="-56" y1="0" x2="56" y2="0"/>
+              <line x1="-39.6" y1="-39.6" x2="39.6" y2="39.6"/><line x1="-39.6" y1="39.6" x2="39.6" y2="-39.6"/>
+            </g>
+            <circle r="42" fill="none" stroke="#8a5a2b" stroke-width="9"/>
+            <circle r="42" fill="none" stroke="#c48d4a" stroke-width="2.5"/>
+            <circle cx="0" cy="-56" r="5" fill="#e3a83c"/>
+          </g>
+        </svg>
+        <div class="helm-read"><b id="hHead">225°</b><span id="hHeadName">西南</span></div>
+      </div>
+      <button class="turn" id="tR" aria-label="向右轉舵">右 ▶</button>
+    </div>
+    <div class="sail">
+      <span class="lbl">帆力</span>
+      <div class="sail-row"><button id="sMinus" aria-label="收帆">−</button><b id="hSail">60%</b><button id="sPlus" aria-label="揚帆">＋</button></div>
+      <div class="sailbar"><em id="hSailBar"></em></div>
+      <span class="sub" id="hSpeed">船速 0.0 節</span>
+    </div>
+    <div class="wind">
+      <svg viewBox="-30 -30 60 60" aria-hidden="true">
+        <circle r="27" fill="none" stroke="#2c4d55" stroke-width="2"/>
+        <text x="0" y="-17" text-anchor="middle" font-size="9" fill="#9db4b1">北</text>
+        <g id="windArrow"><path d="M0,-20 L0,14" stroke="#e4d5ae" stroke-width="3" stroke-linecap="round"/><path d="M0,20 L-7,9 L7,9 Z" fill="#e4d5ae"/></g>
+      </svg>
+      <div><b id="hWind">東北風・和風</b><span id="hZone">東北信風帶</span><span id="hTip">順風</span></div>
+    </div>
+  </div>
+
+  <!-- 開始畫面 -->
+  <div class="overlay" id="start">
+    <div class="sheet">
+      <div class="hero">
+        <span class="era">西元 1630 年 · 航向福爾摩沙</span>
+        <h1>大航海時代</h1>
+        <p>你是一位歐洲船長，帶著 1500 枚金幣從家鄉出航。乘著信風、季風繞過非洲，到亞洲買賣香料、絲綢、瓷器和臺灣的鹿皮。三年後，看誰賺得最多！</p>
+      </div>
+      <div class="sheet-body">
+        <div class="form-row">
+          <label class="field"><span class="lbl">班級（三碼，如 501）</span><input id="pCls" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="501"></label>
+          <label class="field"><span class="lbl">座號</span><input id="pSeat" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="12"></label>
+          <label class="field"><span class="lbl">船長綽號（最多 8 字）</span><input id="pNick" maxlength="8" autocomplete="off" placeholder="海上小勇士"></label>
+        </div>
+        <div class="err-msg" id="pErr"></div>
+        <span class="lbl">選擇你效忠的國家</span>
+        <div class="nations" id="nations"></div>
+        <ul class="rules">
+          <li><b>操舵：</b>拖轉左下角方向盤，或按「左／右」、鍵盤 ← →</li>
+          <li><b>帆力：</b>按「＋ −」或鍵盤 ↑ ↓。順風最快，逆風幾乎走不動</li>
+          <li><b>進港：</b>開到港口附近會出現「進港」按鈕（或按 Enter），可以買賣、補給。名字旁有「修」字的港口能修船</li>
+          <li><b>目的地：</b>點海圖上的港口，就會有箭頭幫你指路</li>
+          <li><b>計分：</b>結束時「金幣 − 1500」就是你的獲利。沒賣掉的貨物不算錢！</li>
+        </ul>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn" id="bBoard1">排行榜</button>
+        <button class="btn" id="bResume" hidden>繼續上次的航程</button>
+        <button class="btn primary" id="bStart">登船出航</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="port" hidden><div class="sheet" id="portSheet"></div></div>
+  <div class="overlay" id="log" hidden><div class="sheet" id="logSheet"></div></div>
+  <div class="overlay" id="evt" hidden><div class="sheet" id="evtSheet" style="width:min(560px,100%)"></div></div>
+  <div class="overlay" id="pause" hidden><div class="sheet" id="pauseSheet" style="width:min(520px,100%)"></div></div>
+  <div class="overlay" id="end" hidden><div class="sheet" id="endSheet"></div></div>
+  <div class="overlay" id="board" hidden><div class="sheet" id="boardSheet" style="width:min(680px,100%)"></div></div>
+</div>
+
+<script>
+'use strict';
+/* =================== 設定 =================== */
+const CFG = {
+  // 部署到 GitHub Pages 後，把 Google Apps Script 網頁應用程式網址貼在這裡，排行榜就會變成全班共用
+  GAS_URL: '',
+  START: Date.UTC(1630, 2, 1),   // 1630 年 3 月 1 日出航
+  TOTAL_DAYS: 1096,              // 三年
+  DAY_PER_SEC: 1.5,              // 真實 1 秒 = 遊戲 1.5 天
+  START_GOLD: 1500,
+  CARGO_MAX: 50,
+  QUIZ_BONUS: 120,
+  SAVE_KEY: 'aod_save_v1',
+  BOARD_KEY: 'aod_board_v1',
+};
+if (location.hash === '#short') CFG.TOTAL_DAYS = 730; // 老師可用 #short 改成兩年
+
+/* =================== 資料 =================== */
+const GOODS = [
+  {id:'pepper',   name:'胡椒',   base:40, col:'#5d4532', desc:'印度的香料，能調味、保存肉類'},
+  {id:'clove',    name:'丁香',   base:80, col:'#93502b', desc:'只產在香料群島，最昂貴的香料'},
+  {id:'silk',     name:'絲綢',   base:70, col:'#c9506f', desc:'中國生產，歐洲、日本、美洲都搶著買'},
+  {id:'porcelain',name:'瓷器',   base:50, col:'#4f86c6', desc:'中國景德鎮等地燒製的瓷器'},
+  {id:'silver',   name:'白銀',   base:60, col:'#c2cbd3', desc:'美洲與日本出產，中國最需要'},
+  {id:'deer',     name:'鹿皮',   base:30, col:'#a9773f', desc:'臺灣原住民獵得，日本做盔甲用'},
+  {id:'sugar',    name:'蔗糖',   base:35, col:'#ede1c4', desc:'臺灣、巴西、古巴的甘蔗製成'},
+  {id:'wine',     name:'葡萄酒', base:30, col:'#7d2b42', desc:'歐洲出產，海外的歐洲人很想念'},
+];
+const GI = Object.fromEntries(GOODS.map((g,i)=>[g.id,i]));
+
+const NATION = {
+  pt:{name:'葡萄牙'}, es:{name:'西班牙'}, nl:{name:'荷蘭'},
+  jp:{name:'日本'}, local:{name:'在地王國'}, none:{name:'無人管轄'}
+};
+const EUROPE_DEMAND = {pepper:2.4, clove:2.6, silk:2.2, porcelain:2.3, sugar:1.6, deer:0.9, silver:1.1};
+
+const PORTS = [
+  {id:'lisbon', name:'里斯本', sub:'今葡萄牙首都', lon:-10.0, lat:38.6, nat:'pt',
+   market:{wine:0.6}, demand:{...EUROPE_DEMAND},
+   info:'葡萄牙是最早投入遠洋探險的國家。1498 年，達伽馬的船隊從里斯本出發，繞過非洲南端的好望角抵達印度，打通了歐洲到亞洲的海上航路。',
+   q:'1498 年率領船隊繞過好望角、抵達印度的航海家是誰？', opts:['達伽馬','哥倫布','鄭和'],
+   exp:'達伽馬替葡萄牙航行到印度；哥倫布替西班牙航向美洲；鄭和是更早的明朝航海家。'},
+  {id:'seville', name:'塞維亞', sub:'今西班牙南部', lon:-6.9, lat:36.3, nat:'es',
+   market:{wine:0.6}, demand:{...EUROPE_DEMAND, silk:2.1, silver:1.3},
+   info:'塞維亞是西班牙與美洲貿易的大本營，美洲的白銀都運回這裡。1519 年麥哲倫的船隊從附近出發，1522 年剩下的一艘船回到西班牙，完成人類第一次環繞地球的航行。',
+   q:'人類第一次環球航行（1519–1522）的船隊，是由哪位航海家率領出發？', opts:['麥哲倫','達伽馬','迪亞士'],
+   exp:'麥哲倫在菲律賓戰死，船員繼續航行回到西班牙，證明地球是圓的、海洋是相連的。'},
+  {id:'amsterdam', name:'阿姆斯特丹', sub:'今荷蘭', lon:3.8, lat:52.6, nat:'nl',
+   market:{wine:0.65}, demand:{...EUROPE_DEMAND, pepper:2.5, clove:2.7},
+   info:'1602 年荷蘭人成立「荷蘭東印度公司」，讓很多人一起出錢投資遠洋貿易，賺了錢再分紅。這家公司後來在亞洲建立許多據點，也在 1624 年來到臺灣。',
+   q:'1624 年來到臺灣大員的，是哪一個組織？', opts:['荷蘭東印度公司','西班牙無敵艦隊','英國皇家海軍'],
+   exp:'荷蘭東印度公司（VOC）不只做生意，還能組軍隊、建城堡，在大員建立了熱蘭遮城。'},
+  {id:'capeverde', name:'維德角群島', sub:'大西洋上的群島', lon:-23.6, lat:15.0, nat:'pt', supplyOnly:true,
+   info:'往南航行的船常在這裡補充淡水和食物。遠洋航行一出海就是好幾個月，船上的水和糧食會越來越少，懂得規劃補給的船長才能平安抵達。',
+   q:'長期航海時，船員因為缺乏新鮮蔬果，容易得到什麼病？', opts:['壞血病','近視','蛀牙'],
+   exp:'缺乏維生素 C 會造成壞血病：牙齦出血、全身無力，嚴重時會死亡。'},
+  {id:'goodhope', name:'好望角', sub:'非洲南端', lon:18.0, lat:-35.0, nat:'none', supplyOnly:true, waterOnly:true,
+   info:'1488 年葡萄牙人迪亞士航行到這裡，因為風浪很大，取名「暴風角」。葡萄牙國王認為繞過這裡就有希望到達印度，於是改名「好望角」。',
+   q:'為什麼「暴風角」會被改名為「好望角」？', opts:['繞過這裡就有希望到達印度','這裡的風景最美','這裡發現了大量黃金'],
+   exp:'繞過好望角，就能從大西洋進入印度洋，前往盛產香料的亞洲。'},
+  {id:'mozambique', name:'莫三比克', sub:'今非洲東南岸', lon:41.0, lat:-15.0, nat:'pt',
+   market:{}, demand:{wine:1.5, silver:1.2},
+   info:'葡萄牙在東非沿岸建立了據點。船隊在這裡修船、補給，並等待合適的季風，再橫渡印度洋前往印度。',
+   q:'橫渡印度洋時，船長最需要配合哪一種「會隨季節改變方向」的風？', opts:['季風','龍捲風','焚風'],
+   exp:'印度洋夏天吹西南季風、冬天吹東北季風，商人要算好月份才出航。'},
+  {id:'calicut', name:'卡利卡特', sub:'今印度西南岸', lon:75.3, lat:11.2, nat:'local',
+   market:{pepper:0.35}, demand:{silver:1.5, wine:1.4, clove:1.4, porcelain:1.3, silk:1.2},
+   info:'印度西南海岸盛產胡椒，1498 年達伽馬抵達這裡。胡椒能替食物調味、幫助保存肉類，在歐洲非常昂貴，這是歐洲人冒險來亞洲的重要原因。',
+   q:'歐洲人冒著生命危險航向亞洲，最主要是想取得什麼？', opts:['香料','冰塊','石油'],
+   exp:'胡椒、丁香等香料在歐洲價格很高，帶回一船就能致富。'},
+  {id:'goa', name:'果亞', sub:'今印度西岸', lon:73.3, lat:15.5, nat:'pt',
+   market:{pepper:0.5}, demand:{wine:1.6, silver:1.4, porcelain:1.4, silk:1.3, clove:1.3},
+   info:'1510 年葡萄牙占領果亞，作為在亞洲的總部。葡萄牙人在印度洋沿岸建立一連串港口據點，用船艦控制海上貿易。',
+   q:'葡萄牙人在亞洲做生意，主要是依靠什麼？', opts:['沿海的港口據點和船隊','修築長城','開挖運河'],
+   exp:'葡萄牙人口少，沒辦法占領大片土地，所以在重要港口建據點、用船隊控制航線。'},
+  {id:'malacca', name:'麻六甲', sub:'今馬來西亞', lon:101.9, lat:1.9, nat:'pt',
+   market:{pepper:0.6, clove:0.8}, demand:{silver:1.4, porcelain:1.3, silk:1.3, wine:1.5},
+   info:'麻六甲海峽是印度洋通往南海的必經水道，誰控制這裡，誰就能掌握東西方的貿易。1511 年葡萄牙占領麻六甲，1641 年被荷蘭奪走。',
+   q:'麻六甲海峽連接了哪兩片海洋？', opts:['印度洋與南海','大西洋與太平洋','地中海與紅海'],
+   exp:'從印度往中國、日本、臺灣，都要經過麻六甲海峽。'},
+  {id:'batavia', name:'巴達維亞', sub:'今印尼雅加達', lon:106.8, lat:-5.8, nat:'nl',
+   market:{pepper:0.55, clove:0.75, sugar:0.8}, demand:{porcelain:1.5, silk:1.5, silver:1.5, wine:1.6, deer:1.1},
+   info:'1619 年荷蘭東印度公司在爪哇島建立巴達維亞，作為亞洲總部。在大員（臺灣）的荷蘭長官，都要聽從巴達維亞總督的命令。',
+   q:'巴達維亞就是今天的哪一座城市？', opts:['印尼雅加達','菲律賓馬尼拉','日本長崎'],
+   exp:'巴達維亞是荷蘭在亞洲的指揮中心，大員的貿易報告都要送到這裡。'},
+  {id:'ternate', name:'香料群島', sub:'摩鹿加群島，今印尼東部', lon:127.15, lat:0.8, nat:'nl',
+   market:{clove:0.25}, demand:{silver:1.4, porcelain:1.4, silk:1.3, wine:1.4},
+   info:'當時全世界的丁香和肉豆蔻，幾乎只產在這片小島，因此被稱為「香料群島」。葡萄牙、西班牙、荷蘭都曾在這裡激烈爭奪。',
+   q:'摩鹿加群島為什麼被稱為「香料群島」？', opts:['盛產丁香、肉豆蔻等香料','島上有很多寺廟','是造船的中心'],
+   exp:'稀有的香料讓這幾座小島成為各國爭奪的寶地。'},
+  {id:'macau', name:'澳門', sub:'今中國澳門', lon:113.5, lat:21.9, nat:'pt',
+   market:{silk:0.45, porcelain:0.5}, demand:{silver:1.9, pepper:1.4, clove:1.6, wine:1.2, deer:1.1},
+   info:'1557 年起，葡萄牙人獲得明朝允許在澳門居住、經商。中國的絲綢和瓷器從這裡運往日本、東南亞和歐洲；中國也非常需要外國的白銀。',
+   q:'葡萄牙人在澳門購買、再轉賣到世界各地的中國商品，主要是什麼？', opts:['絲綢與瓷器','鹿皮與蔗糖','胡椒與丁香'],
+   exp:'中國的絲綢和瓷器品質好，在世界各地都能賣到高價。'},
+  {id:'tayouan', name:'大員', sub:'今臺南安平', lon:119.9, lat:23.0, nat:'nl',
+   market:{deer:0.3, sugar:0.45, silk:0.7, porcelain:0.7}, demand:{silver:1.7, pepper:1.3, clove:1.4, wine:1.3},
+   info:'1624 年荷蘭人來到大員，建立熱蘭遮城。荷蘭人向原住民收購鹿皮，招募漢人來臺種甘蔗，再把鹿皮、蔗糖賣到日本，並在這裡轉運中國的絲綢和瓷器。臺灣從此被捲入世界貿易。',
+   q:'荷蘭人在大員（今臺南安平）建立的城堡是哪一座？', opts:['熱蘭遮城','億載金城','聖薩爾瓦多城'],
+   exp:'熱蘭遮城就是今天的安平古堡；聖薩爾瓦多城是西班牙人在雞籠建的城；億載金城是清朝的砲台。'},
+  {id:'keelung', name:'雞籠', sub:'今基隆和平島', lon:121.75, lat:25.5, nat:'es',
+   market:{deer:0.4, silk:0.8}, demand:{silver:1.6, wine:1.4, pepper:1.2},
+   info:'為了保護馬尼拉和中國、日本之間的貿易，西班牙人在 1626 年占領雞籠，建立聖薩爾瓦多城，之後也到了淡水。1642 年，荷蘭人把西班牙人趕出臺灣。',
+   q:'1642 年把西班牙人趕出北臺灣的是誰？', opts:['荷蘭人','葡萄牙人','日本人'],
+   exp:'荷蘭人北上攻下雞籠，從此成為臺灣西部最主要的外來勢力。'},
+  {id:'manila', name:'馬尼拉', sub:'今菲律賓首都', lon:120.2, lat:14.5, nat:'es',
+   market:{silk:0.75, porcelain:0.75}, demand:{silver:1.3, wine:1.6, pepper:1.2, clove:1.3},
+   info:'1571 年西班牙人在馬尼拉建城。每年都有大帆船從墨西哥載著美洲白銀橫渡太平洋來到這裡，向中國商人購買絲綢和瓷器，這就是「馬尼拉大帆船貿易」。',
+   q:'馬尼拉大帆船從美洲運來什麼，用來購買中國的絲綢？', opts:['白銀','茶葉','鹿皮'],
+   exp:'美洲白銀經過馬尼拉大量流入中國，把亞洲和美洲連在一起。'},
+  {id:'nagasaki', name:'長崎', sub:'日本九州，含平戶', lon:129.4, lat:32.8, nat:'jp',
+   market:{silver:0.5}, demand:{deer:2.6, silk:2.1, sugar:1.7, porcelain:1.5, pepper:1.4, clove:1.5},
+   info:'日本盛產白銀，也很需要鹿皮來製作武士的盔甲和衣物，所以臺灣的鹿皮在日本大受歡迎。1624 年日本與西班牙斷絕往來，1639 年又禁止葡萄牙船，最後只剩荷蘭和中國商人能來貿易。',
+   q:'臺灣的哪一種商品，被大量賣到日本？', opts:['鹿皮','胡椒','葡萄酒'],
+   exp:'臺灣梅花鹿的皮大量出口日本，一年可以多達數萬張。'},
+  {id:'acapulco', name:'阿卡普科', sub:'今墨西哥太平洋岸', lon:-99.9, lat:16.4, nat:'es',
+   market:{silver:0.4}, demand:{silk:2.6, porcelain:2.1, pepper:1.8, clove:2.0, wine:1.4},
+   info:'這裡是馬尼拉大帆船在美洲的港口。從美洲往菲律賓要乘著東北信風向西；回程則要先往北走，乘著西風帶回到美洲，單程就要好幾個月。',
+   q:'大帆船從菲律賓回美洲時，要先往北航行，利用哪一種風？', opts:['西風帶的西風','赤道無風帶','東北信風'],
+   exp:'北緯 30 度以北吹西風，往東回美洲就能順風。'},
+  {id:'veracruz', name:'維拉克魯茲', sub:'今墨西哥東岸', lon:-95.7, lat:19.4, nat:'es',
+   market:{silver:0.5, sugar:0.8}, demand:{wine:1.5, silk:2.0, porcelain:1.9, pepper:1.7},
+   info:'美洲礦山挖出的白銀運到這裡，再裝上船運回西班牙。大量白銀流入歐洲和亞洲，改變了全世界的經濟。',
+   q:'大航海時代，西班牙從美洲運回最多的寶物是什麼？', opts:['白銀','絲綢','瓷器'],
+   exp:'墨西哥和南美洲的銀礦讓西班牙一度成為最富有的國家。'},
+  {id:'havana', name:'哈瓦那', sub:'今古巴首都', lon:-82.4, lat:23.5, nat:'es',
+   market:{sugar:0.55}, demand:{wine:1.4, silk:1.7, porcelain:1.6, pepper:1.6, silver:1.0},
+   info:'1492 年哥倫布替西班牙航行，橫越大西洋到達加勒比海。後來西班牙的運寶船隊每年在哈瓦那集合，再結伴橫越大西洋，防止海盜搶劫。',
+   q:'1492 年為西班牙橫越大西洋、抵達美洲的航海家是誰？', opts:['哥倫布','麥哲倫','達伽馬'],
+   exp:'哥倫布原本想往西航行到亞洲，卻到達了歐洲人不知道的美洲。'},
+  {id:'salvador', name:'薩爾瓦多', sub:'今巴西東岸', lon:-37.8, lat:-13.0, nat:'pt',
+   market:{sugar:0.5}, demand:{wine:1.4, silver:1.3, silk:1.6, porcelain:1.5, pepper:1.5},
+   info:'葡萄牙人在巴西開闢大片甘蔗園，生產蔗糖運往歐洲。甘蔗園需要大量人力，歐洲人從非洲強迫運來許多黑人奴隸，這是大航海時代黑暗的一面。',
+   q:'巴西的甘蔗園主要生產什麼商品運往歐洲？', opts:['蔗糖','鹿皮','白銀'],
+   exp:'蔗糖在歐洲很受歡迎，但甘蔗園的財富建立在奴隸的苦難上。'},
+];
+const PI_ = Object.fromEntries(PORTS.map((p,i)=>[p.id,i]));
+
+const CONCEPTS = [
+  {id:'trade', name:'信風', text:'赤道兩側、緯度大約 5 到 30 度之間，終年吹著穩定的風。北半球吹東北風，南半球吹東南風。哥倫布就是乘著東北信風到達美洲。'},
+  {id:'doldrums', name:'赤道無風帶', text:'赤道附近常常沒有風，或風向亂變，帆船可能好幾天都走不動。船員最怕在這裡耗光淡水和糧食。'},
+  {id:'westerly', name:'西風帶', text:'南北緯大約 35 到 60 度之間，風從西邊吹來。繞過好望角往東進入印度洋、或從美洲回歐洲，都要乘西風。南半球的西風特別強，稱為「咆哮西風」。'},
+  {id:'monsoon', name:'季風', text:'印度洋和南海的風向會隨季節改變：夏天吹西南風，冬天吹東北風。商人要算好月份，「順著季風」出航和回航。臺灣也在季風區裡。'},
+  {id:'scurvy', name:'壞血病', text:'在海上太久吃不到新鮮蔬果，缺乏維生素 C，船員會牙齦出血、全身無力。所以船長要定期靠港補給。'},
+  {id:'storm', name:'暴風與颱風', text:'好望角附近風浪巨大；南海和臺灣附近夏秋常有颱風。遇到暴風時把帆收小一點，船比較不容易受損。'},
+  {id:'pirate', name:'海盜與武裝海商', text:'貿易越熱鬧的海峽，海盜就越多。東亞海域有許多武裝海商集團，例如活躍在臺灣海峽的鄭芝龍，他們既做生意也打仗。'},
+];
+const CI = Object.fromEntries(CONCEPTS.map((c,i)=>[c.id,i]));
+const TOTAL_CARDS = PORTS.length + CONCEPTS.length;
+
+/* 粗略海岸線（經度, 緯度） */
+const LAND = [
+ // 歐亞大陸
+ [[-5.6,36.1],[-6.3,36.5],[-7.4,37.2],[-8.9,37.0],[-9.5,38.7],[-8.9,41.0],[-9.3,43.0],[-8.0,43.7],[-4.0,43.5],[-1.5,43.4],[-1.2,46.0],[-2.5,47.3],[-4.7,48.4],[-1.6,48.7],[-1.3,49.7],[1.5,50.2],[2.5,51.1],[4.0,51.9],[4.7,53.0],[7.0,53.6],[8.6,54.0],[8.2,55.5],[8.6,57.1],[10.6,57.7],[11.2,58.5],[11.5,59.0],[10.5,59.3],[9.0,58.8],[7.0,58.0],[5.5,58.9],[5.0,60.5],[5.0,62.0],[8.0,63.5],[10.5,64.5],[13.0,66.5],[15.0,68.3],[18.0,69.8],[23.0,70.8],[28.0,71.0],[31.0,70.0],[33.0,69.3],[40.0,67.8],[44.0,68.5],[53.0,68.8],[60.0,69.8],[68.0,72.5],[72.0,74.0],[80.0,74.0],[100.0,77.0],[120.0,73.5],[140.0,72.5],[160.0,70.0],[179.9,69.0],[179.9,65.0],[172.0,61.0],[164.0,60.0],[163.0,58.0],[162.5,56.0],[160.0,53.5],[156.5,51.0],[156.0,57.0],[155.0,59.5],[150.0,59.5],[143.0,59.3],[138.0,56.5],[137.0,54.0],[141.0,52.5],[140.5,48.5],[138.0,45.5],[135.0,43.5],[132.0,43.2],[130.7,42.3],[129.7,41.0],[129.4,38.0],[129.4,36.0],[129.2,35.2],[127.0,34.6],[126.3,34.6],[126.4,36.5],[126.6,37.5],[125.2,38.0],[125.1,39.6],[124.3,39.9],[121.6,39.1],[121.2,40.8],[119.5,39.9],[118.0,39.1],[117.7,38.4],[119.0,37.2],[120.7,37.8],[122.5,37.3],[121.0,36.6],[119.5,35.3],[120.4,33.8],[121.0,32.2],[121.9,31.0],[121.9,30.0],[120.8,27.8],[119.6,26.2],[118.6,24.6],[117.0,23.5],[116.0,22.8],[114.5,22.4],[113.6,22.3],[112.5,21.8],[111.0,21.5],[110.3,21.2],[110.1,20.3],[109.7,21.3],[108.5,21.6],[106.7,20.5],[105.7,18.8],[106.6,17.2],[108.0,15.8],[109.2,13.5],[109.2,11.6],[107.0,10.4],[105.1,8.6],[104.8,10.3],[103.0,11.2],[101.6,12.6],[100.0,13.4],[99.2,10.6],[100.2,8.5],[100.6,7.0],[102.2,6.2],[103.4,4.5],[103.4,2.8],[104.3,1.4],[103.4,1.3],[102.3,2.0],[101.3,2.9],[100.5,4.5],[100.3,6.5],[98.3,8.0],[98.5,10.0],[98.6,13.5],[97.6,16.5],[95.4,15.8],[94.3,16.2],[94.5,19.0],[92.3,20.8],[91.8,22.3],[90.5,22.0],[89.0,21.7],[87.0,21.5],[86.8,20.2],[85.0,19.3],[82.3,16.6],[80.3,15.5],[80.2,13.0],[79.8,10.3],[78.2,9.0],[77.5,8.1],[76.3,9.5],[75.8,11.2],[74.8,13.0],[73.8,15.5],[72.9,19.0],[72.7,21.5],[70.6,20.8],[69.0,22.3],[70.0,22.9],[68.5,23.6],[67.4,24.2],[66.6,25.4],[61.6,25.2],[57.3,25.8],[56.3,27.1],[54.0,26.7],[51.5,27.9],[50.2,29.9],[48.0,30.0],[48.2,29.0],[49.6,27.0],[50.3,26.0],[51.5,25.4],[52.0,24.0],[54.5,24.2],[56.1,26.1],[56.5,24.2],[59.0,22.5],[59.8,22.4],[58.5,20.5],[57.7,18.9],[55.2,17.2],[52.0,16.4],[49.0,14.5],[45.0,12.8],[43.5,12.7],[42.7,15.5],[40.8,19.7],[39.0,21.5],[38.0,24.0],[36.5,26.0],[35.0,28.0],[34.9,29.5],[34.3,31.3],[35.0,32.8],[35.9,35.3],[36.2,36.6],[34.0,36.3],[30.5,36.6],[28.0,36.7],[27.0,37.7],[26.3,39.5],[26.2,40.1],[24.0,40.8],[22.9,40.6],[23.7,39.5],[23.0,38.3],[24.0,38.0],[23.0,36.5],[21.7,36.8],[21.2,38.3],[20.2,39.6],[19.4,41.8],[16.5,43.5],[13.7,45.6],[12.4,45.3],[12.3,44.3],[13.6,43.5],[16.0,41.5],[18.5,40.2],[17.0,39.0],[16.6,38.0],[15.6,38.0],[15.7,40.0],[14.0,40.8],[12.0,41.8],[10.5,43.3],[8.8,44.4],[7.5,43.8],[6.0,43.1],[4.6,43.4],[3.0,43.2],[3.2,41.9],[1.0,41.0],[0.0,39.5],[-0.7,37.6],[-2.0,36.7],[-4.4,36.7]],
+ // 非洲（含西奈半島）
+ [[-5.9,35.8],[-9.8,30.5],[-13,27.5],[-17,21],[-17.5,14.7],[-15,11],[-13,8.5],[-11,6.5],[-7.5,4.4],[-2,4.8],[3,6.3],[6,4.3],[9.5,3.5],[9.8,1],[9,-1],[12,-5],[13.2,-8.8],[12,-15],[14.5,-22.5],[15.5,-27],[17.5,-30],[18.4,-34.2],[20,-34.8],[22.5,-34],[26,-33.8],[28,-32.7],[31,-29.5],[32.6,-26],[35.3,-24],[35.5,-21],[34.7,-19.8],[37,-17.5],[40.5,-15],[40.7,-11],[39.3,-6.8],[40,-3.5],[42.5,-0.5],[46,2.2],[49.5,7],[51.3,11.8],[45,10.5],[43.3,11.5],[42.7,13.0],[40.5,14.8],[39.4,15.8],[38.5,18.0],[37.2,19.6],[36.9,22.0],[35.6,23.9],[34,27.5],[34.9,29.5],[34.3,31.3],[32.3,31.3],[30,31.4],[25,31.6],[22,32.8],[20,32.1],[19.5,30.5],[16.6,31.2],[13.2,32.9],[11,33.5],[10.2,36.8],[8,37],[3,36.8],[-1,35.6]],
+ // 馬達加斯加
+ [[49.3,-12],[50.5,-15.5],[49.5,-17.5],[47.2,-25],[45,-25.5],[43.5,-22],[44.3,-17],[46.5,-15.5]],
+ // 大不列顛、愛爾蘭、冰島
+ [[-5.7,50],[-3,50.6],[1.4,51.2],[1.7,52.7],[0.2,53.5],[-0.5,54.5],[-1.6,55.6],[-2,57.6],[-3.3,58.6],[-5,58.6],[-6.2,56.6],[-5,55.6],[-3,54.9],[-3.2,53.4],[-4.6,53.3],[-4.5,52.2],[-5.3,51.7],[-3,51.4]],
+ [[-6,52.2],[-6.3,54],[-7.2,55.3],[-8.4,55],[-10,53.5],[-10.2,51.6],[-8.2,51.7]],
+ [[-24,65.5],[-22,63.8],[-18,63.4],[-14,64.5],[-13.6,65.6],[-16,66.5],[-22.5,66.4]],
+ // 斯里蘭卡
+ [[79.8,8.2],[80.2,9.8],[81.9,7.5],[81.2,6.2],[80.1,6.0]],
+ // 日本
+ [[129.6,33.3],[130.3,31.2],[131.5,31.6],[132.0,33.8],[133.5,33.4],[135.3,33.6],[136.8,34.3],[138.9,34.6],[140.9,35.7],[141.0,38.3],[142.0,39.6],[141.4,41.4],[140.0,40.8],[139.8,39.0],[137.0,37.0],[135.5,35.6],[133.0,35.5],[131.0,34.4]],
+ [[140,41.6],[141.5,42.5],[143.5,42],[145.5,43.3],[144,44.1],[141.7,45.4],[141.3,43.3]],
+ // 臺灣、海南
+ [[120.1,23.0],[120.6,22.0],[120.85,21.9],[121.4,22.7],[121.6,23.8],[121.9,24.6],[121.9,25.1],[121.5,25.3],[121.0,25.0],[120.3,24.2]],
+ [[108.6,19.2],[109.5,18.2],[110.5,18.7],[111,19.7],[110.6,20.1],[109.2,20]],
+ // 菲律賓
+ [[120.6,18.5],[122.3,18.5],[122.2,16.5],[121.6,15.0],[122.5,14.2],[124.2,13.0],[123.5,12.6],[121.8,13.8],[120.6,13.9],[120.6,14.8],[119.8,16.2]],
+ [[122,11.8],[122.4,10.6],[123.5,9.6],[125.2,10.2],[125.4,11.4],[124.4,12.4],[123.0,12.0]],
+ [[122,7.0],[123.5,7.7],[124.3,8.7],[125.5,9.8],[126.6,7.3],[126,6.2],[125.4,5.6],[124,6.3]],
+ // 南洋群島
+ [[109.0,1.5],[109.6,-1.0],[110.2,-2.9],[114.5,-3.5],[116.3,-3.0],[116.0,-1.0],[117.6,0.8],[118.8,1.0],[117.8,2.5],[119.2,5.2],[117.0,7.0],[116.0,6.0],[114.0,4.5],[111.3,2.5]],
+ [[95.3,5.6],[97.5,5.2],[98.5,3.8],[100.5,2.0],[103.5,-1.0],[104.6,-2.4],[106,-3.3],[105.8,-5.9],[104.6,-5.9],[102,-3.8],[100.3,-1.0],[98.7,1.7],[96,3.8]],
+ [[105.2,-6.8],[106.8,-6.0],[108.5,-6.4],[110.8,-6.4],[112.7,-6.9],[114.5,-7.7],[114.4,-8.7],[111,-8.2],[108,-7.8],[106,-7.4]],
+ [[119.4,-5.5],[120.4,-5.6],[121.3,-4.6],[123.2,-4.6],[121.6,-2.2],[123.3,-0.9],[121.0,-1.0],[120.2,0.3],[124.0,0.4],[125.0,1.5],[124.0,1.1],[120.8,1.3],[119.8,-0.6],[118.8,-2.8]],
+ [[127.9,2.2],[128.6,1.4],[128.0,0.7],[128.9,0.3],[128.2,-0.8],[127.7,0.1],[127.6,1.7]],
+ [[131,-1.3],[134,-0.8],[138,-1.6],[141,-2.6],[145.5,-4.5],[147.5,-6.5],[150.5,-10.5],[147,-10.2],[143,-9],[141,-9.2],[138,-8.3],[137.6,-5.5],[134,-4],[132,-2.8]],
+ // 澳洲
+ [[113.5,-22],[114,-26.5],[115,-34],[118,-35],[123,-33.8],[129,-31.6],[132,-32],[135.5,-34.8],[138,-35.6],[140.5,-38],[144,-38.3],[146.5,-39],[150,-37.5],[153,-31],[153.5,-28],[153,-25],[150.8,-22.5],[146.3,-19],[145.4,-15],[143.5,-14],[142.5,-10.7],[141.5,-13],[141.6,-17],[140,-17.7],[136,-15.5],[137,-12],[132,-11.3],[129.5,-15],[126,-14],[122,-17.5],[118.7,-20.3]],
+ // 美洲
+ [[-168,66],[-165,62],[-160,58.5],[-157,57],[-153,57.5],[-150,59.5],[-146,60.7],[-140,59.7],[-136,58],[-133,55],[-130,54],[-128,50.5],[-124.6,48.4],[-124,46],[-124.4,42.5],[-123.8,39.8],[-122.5,37.6],[-120.6,34.6],[-117.2,32.7],[-116,30.5],[-114.2,28],[-112.5,26],[-110,23],[-109.5,23.3],[-111,25.5],[-113,28.5],[-114.7,31.6],[-112.2,29],[-110.8,27.5],[-109,25.5],[-105.6,23],[-105.3,20.5],[-104.3,19.1],[-101.5,17.8],[-99.9,16.85],[-96,15.7],[-94,16.1],[-92,14.5],[-89,13.3],[-87.5,13],[-85.7,11],[-85.8,10],[-84,9.2],[-81.5,7.6],[-80,7.3],[-78,8.3],[-77.4,6.5],[-77.5,4],[-78.8,1.5],[-80,0],[-80.9,-2.2],[-81.2,-5],[-79.3,-7.7],[-77,-12],[-76.2,-14],[-71.3,-17.6],[-70.3,-18.5],[-70.4,-23.6],[-71.5,-29],[-71.7,-33],[-73.5,-37],[-73.7,-41.5],[-74.3,-45],[-75.5,-48.5],[-74.5,-51.8],[-72.5,-53.1],[-70.5,-52.7],[-68.4,-52.3],[-69,-51],[-67.7,-49],[-65.8,-47.7],[-67.5,-46],[-65,-45],[-63.6,-42.6],[-65,-41],[-62.3,-38.8],[-57.5,-38.2],[-56.7,-36.4],[-58.4,-34.6],[-54,-34.8],[-53,-33.7],[-51,-31],[-48.5,-28],[-48.6,-26],[-45,-23.5],[-41,-22],[-39,-17.9],[-39,-13.5],[-38.5,-13],[-35.2,-8],[-35,-5.5],[-38.5,-3.7],[-41.8,-2.8],[-44.5,-2.5],[-48.5,-1],[-50,0.5],[-51.5,4],[-53.5,5.6],[-57,6],[-60,8.5],[-62,10.7],[-64.5,10.2],[-68,10.5],[-71,12],[-71.6,10.5],[-72.5,11.8],[-75.5,10.5],[-76.8,8.5],[-77.6,8.8],[-79.5,9.6],[-81.5,9],[-83.5,10.8],[-83.7,12.8],[-83.2,15],[-85.5,15.9],[-88,15.8],[-88.3,18.4],[-87.5,21.5],[-90.4,21],[-90.7,19.7],[-91.5,18.6],[-94.5,18.2],[-96.1,19.2],[-97.5,22],[-97.6,25.9],[-97.3,27.8],[-94.7,29.4],[-90,29.2],[-89,30.4],[-85.8,30.2],[-83.9,29.9],[-82.6,28],[-81.8,26],[-80.9,25.2],[-80.1,26.9],[-81.2,29.8],[-81.3,31.5],[-79,33.6],[-76,35.3],[-76,37],[-75.7,38],[-74,40.5],[-70,41.6],[-70.6,43],[-67,44.8],[-65.5,43.5],[-60,45.8],[-64,48],[-61,50.2],[-56,51.8],[-56,52.5],[-60,55],[-62,57.5],[-64.5,60.3],[-70,59],[-75,62],[-80,64],[-85,70],[-110,72],[-140,70],[-156,71.3],[-166,68.8]],
+ [[-84.9,21.9],[-83,23.0],[-80.5,23.2],[-77.5,21.9],[-75.6,21.1],[-74.1,20.2],[-77.7,19.8],[-78.5,21.0],[-81.5,22.1],[-82.6,21.6]],
+ [[-74.4,18.4],[-72.8,19.9],[-70,19.7],[-68.4,18.6],[-70,18.2],[-71.5,17.6]],
+ [[-59.3,47.6],[-55.4,46.9],[-52.7,47.5],[-53.5,49.5],[-56,51.6],[-57.6,50.3]],
+ [[-50,60],[-43,59.8],[-38,65.5],[-22,70.5],[-20,78],[-60,78],[-55,70],[-53,66]],
+];
+const LAND_BB = LAND.map(poly=>{let a=1e9,b=-1e9,c=1e9,d=-1e9;for(const[x,y]of poly){a=Math.min(a,x);b=Math.max(b,x);c=Math.min(c,y);d=Math.max(d,y);}return[a,b,c,d];});
+const LAND_PATHS = LAND.map(poly=>{const p=new Path2D();poly.forEach(([x,y],i)=>i?p.lineTo(x,y):p.moveTo(x,y));p.closePath();return p;});
+
+/* =================== 工具 =================== */
+const $ = s => document.querySelector(s);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const wrapLon=l=>((l+180)%360+360)%360-180;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const angDiff=(a,b)=>((a-b)%360+540)%360-180;
+const DIR8=['北','東北','東','東南','南','西南','西','西北'];
+const dirName=deg=>DIR8[Math.round((((deg%360)+360)%360)/45)%8];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>Math.round(n).toLocaleString('zh-TW');
+function smooth(e0,e1,x){const t=clamp((x-e0)/(e1-e0),0,1);return t*t*(3-2*t);}
+function band(x,a,b,f){return smooth(a-f,a+f,x)*(1-smooth(b-f,b+f,x));}
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+function lsDel(k){try{localStorage.removeItem(k);}catch(e){}}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function dateOf(day){const d=new Date(CFG.START+Math.floor(day)*864e5);return {y:d.getUTCFullYear(),m:d.getUTCMonth()+1,d:d.getUTCDate(),date:d};}
+function dateStr(day){const o=dateOf(day);return `${o.y}年${o.m}月${o.d}日`;}
+function dayOfYear(day){const o=dateOf(day);return Math.floor((o.date-Date.UTC(o.y,0,1))/864e5);}
+function distDeg(lon1,lat1,lon2,lat2){const dl=wrapLon(lon2-lon1)*Math.cos((lat1+lat2)/2*Math.PI/180);return Math.hypot(dl,lat2-lat1);}
+function bearing(lon1,lat1,lon2,lat2){const dl=wrapLon(lon2-lon1)*Math.cos((lat1+lat2)/2*Math.PI/180);return (Math.atan2(dl,lat2-lat1)*180/Math.PI+360)%360;}
+
+function inLand(lon,lat){
+  lon=wrapLon(lon);
+  for(let k=0;k<LAND.length;k++){
+    const bb=LAND_BB[k]; if(lon<bb[0]||lon>bb[1]||lat<bb[2]||lat>bb[3]) continue;
+    const poly=LAND[k]; let inside=false;
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+      const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+      if(((yi>lat)!==(yj>lat))&&(lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside;
+    }
+    if(inside) return true;
+  }
+  return false;
+}
+
+/* =================== 風 =================== */
+function windAt(lon,lat,day){
+  lon=wrapLon(lon);
+  const a=Math.abs(lat), north=lat>=0, doy=dayOfYear(day);
+  const wob=Math.sin(day/9+lon/23)*12+Math.sin(day/4.3+lat/11)*6;
+  let u=0,v=0;
+  const add=(deg,kn,w)=>{if(w<=0)return;const r=deg*Math.PI/180;u+=Math.sin(r)*kn*w;v+=Math.cos(r)*kn*w;};
+  add((north?235:305)+wob,14,band(a,4,28,2));
+  const roaring=!north&&a>38;
+  add((north?70:95)+wob,roaring?22:16,band(a,34,66,4));
+  // 赤道無風帶：風小、風向不定，但仍能慢慢前進
+  add(200+Math.sin(day/6+lon/9)*60,7,1-smooth(2,5,a));
+  // 伊比利半島外海的北風（葡萄牙北風），讓歐洲出航的船能往南走
+  const wp=band(lon,-35,8,3)*band(lat,26,54,3);
+  if(wp>0){const r=(205+wob)*Math.PI/180;u=u*(1-wp)+Math.sin(r)*13*wp;v=v*(1-wp)+Math.cos(r)*13*wp;}
+  const wm=band(lon,42,128,4)*band(lat,-3,28,3);
+  let season='';
+  if(wm>0){
+    let md,mk;
+    if(doy>=135&&doy<=270){md=45;mk=15;season='西南季風';}
+    else if(doy>=305||doy<=75){md=225;mk=14;season='東北季風';}
+    else {md=(day*3)%360;mk=5;season='季風轉換期';}
+    const r=(md+wob)*Math.PI/180;
+    u=u*(1-wm)+Math.sin(r)*mk*wm; v=v*(1-wm)+Math.cos(r)*mk*wm;
+  }
+  let kn=Math.max(5,Math.hypot(u,v));
+  const to=(Math.atan2(u,v)*180/Math.PI+360)%360;
+  let zone;
+  if(wm>0.5) zone={key:'monsoon',name:'季風區・'+season};
+  else if(wp>0.5) zone={key:'north',name:'伊比利半島外海・北風'};
+  else if(a<4) zone={key:'doldrums',name:'赤道無風帶'};
+  else if(a<29) zone={key:'trade',name:north?'東北信風帶':'東南信風帶'};
+  else if(a<34) zone={key:'horse',name:'副熱帶無風帶'};
+  else zone={key:'westerly',name:roaring?'西風帶・咆哮西風':'西風帶'};
+  return {to,kn,zone};
+}
+const POLAR=[[0,1],[60,1],[90,.9],[120,.7],[150,.45],[180,.3]];
+function polar(rel){rel=Math.abs(rel);for(let i=1;i<POLAR.length;i++){const[a,fa]=POLAR[i-1],[b,fb]=POLAR[i];if(rel<=b)return fa+(fb-fa)*(rel-a)/(b-a);}return .3;}
+function windWord(kn){return kn<6?'微風':kn<12?'和風':kn<18?'清風':'強風';}
+
+/* =================== 狀態 =================== */
+let S=null;
+let screen='start';
+let modal=null;          // 'port'|'log'|'evt'|'pause'|'board'
+let zoomIdx=0;
+const ZOOM_NAMES=['近','中','全圖'];
+const input={turn:0,keyTurn:0};
+let trail=[]; let trailAcc=0;
+let pendingDay=0;
+
+function newState(player,nation){
+  const home={pt:'lisbon',es:'seville',nl:'amsterdam'}[nation];
+  const hp=PORTS[PI_[home]];
+  return {v:1,player,nation,day:0,lon:hp.lon,lat:hp.lat,heading:225,sail:.6,
+    gold:CFG.START_GOLD,cargo:{},supplies:100,hull:100,
+    visited:{},quiz:{},concepts:{},flags:{},daysAtSea:0,distNm:0,
+    press:PORTS.map(()=>GOODS.map(()=>0)),lastPort:PI_[home],target:null,ended:false,submitted:false,trades:0};
+}
+function save(){ if(S) lsSet(CFG.SAVE_KEY,S); }
+function cargoUsed(){let n=0;for(const k in S.cargo)n+=S.cargo[k].n;return n;}
+function cardCount(){return Object.keys(S.visited).length+Object.keys(S.concepts).length;}
+
+/* =================== 國家關係與價格 =================== */
+function relation(nat){
+  const me=S.nation, iber=n=>n==='pt'||n==='es';
+  if(nat===me) return 'own';
+  if(nat==='none') return 'none';
+  if(iber(me)&&iber(nat)) return 'ally';
+  if((me==='nl'&&iber(nat))||(iber(me)&&nat==='nl')) return 'enemy';
+  return 'neutral';
+}
+const REL={
+  own:{fee:0,buy:.95,sell:1.05,label:'本國港口：免入港費，買賣價格較優惠'},
+  ally:{fee:20,buy:1,sell:1,label:'友好港口：入港費 20（1580–1640 年葡萄牙和西班牙由同一位國王統治）'},
+  neutral:{fee:25,buy:1,sell:1,label:'外國港口：入港費 25'},
+  enemy:{fee:60,buy:1.08,sell:.94,label:'敵對港口：荷蘭與葡萄牙、西班牙正在交戰，入港費 60，價格較差'},
+  none:{fee:0,buy:1,sell:1,label:'無人管轄的海岸，可以免費取水'},
+};
+function sellMult(p,g){if(p.demand&&p.demand[g]!=null)return p.demand[g];if(p.market&&p.market[g]!=null)return p.market[g]*.9;return 1;}
+function priceBuy(pi,gi){const p=PORTS[pi],g=GOODS[gi];const m=p.market&&p.market[g.id];if(m==null)return null;return Math.max(1,Math.round(g.base*m*1.1*(1+S.press[pi][gi])*REL[relation(p.nat)].buy));}
+function priceSell(pi,gi){const p=PORTS[pi],g=GOODS[gi];if(p.supplyOnly)return null;return Math.max(1,Math.round(g.base*sellMult(p,g.id)*(1+S.press[pi][gi])*REL[relation(p.nat)].sell));}
+function doBuy(pi,gi,n){
+  const g=GOODS[gi];let done=0,spent=0;
+  for(let i=0;i<n;i++){
+    if(cargoUsed()>=CFG.CARGO_MAX)break;
+    const pr=priceBuy(pi,gi); if(pr==null||S.gold<pr)break;
+    S.gold-=pr; spent+=pr;
+    const c=S.cargo[g.id]||(S.cargo[g.id]={n:0,cost:0}); c.n++; c.cost+=pr;
+    S.press[pi][gi]=Math.min(.8,S.press[pi][gi]+.012); done++;
+  }
+  if(done){S.trades++;}
+  return {done,spent};
+}
+function doSell(pi,gi,n){
+  const g=GOODS[gi],c=S.cargo[g.id];let done=0,got=0;
+  if(!c)return {done,got};
+  for(let i=0;i<n&&c.n>0;i++){
+    const pr=priceSell(pi,gi); if(pr==null)break;
+    c.cost-=c.cost/c.n; c.n--; S.gold+=pr; got+=pr;
+    S.press[pi][gi]=Math.max(-.6,S.press[pi][gi]-.012); done++;
+  }
+  if(c.n<=0) delete S.cargo[g.id];
+  if(done){S.trades++;}
+  return {done,got};
+}
+
+/* =================== 航行更新 =================== */
+let blockedToastAt=0;
+function update(dt){
+  // 轉舵
+  const turn=clamp(input.turn+input.keyTurn,-1,1);
+  if(turn) S.heading=(S.heading+turn*75*dt+360)%360;
+  const dDays=dt*CFG.DAY_PER_SEC;
+  const w=windAt(S.lon,S.lat,S.day);
+  const rel=angDiff(S.heading,w.to);
+  let v=.12*w.kn*polar(rel)*S.sail;
+  if(S.supplies<=0) v*=.5;
+  if(S.flags.scurvy) v*=.75;
+  if(S.hull<30) v*=.8;
+  S.speed=v;
+  if(v>0){
+    const h=S.heading*Math.PI/180;
+    const dLat=v*Math.cos(h)*dDays;
+    const dLon=v*Math.sin(h)*dDays/Math.max(.3,Math.cos(S.lat*Math.PI/180));
+    let nl=wrapLon(S.lon+dLon), nt=clamp(S.lat+dLat,-58,68);
+    if(!inLand(nl,nt)){ S.lon=nl;S.lat=nt; S.distNm+=v*dDays*60; }
+    else if(!inLand(S.lon,nt)&&Math.abs(dLat)>1e-6){ S.lat=nt; S.distNm+=Math.abs(dLat)*60; }
+    else if(!inLand(nl,S.lat)&&Math.abs(dLon)>1e-6){ S.lon=nl; S.distNm+=Math.abs(dLon)*60; }
+    else { S.speed=0; const now=performance.now(); if(now-blockedToastAt>4000){blockedToastAt=now;toast('前方是陸地！請轉舵，沿著海岸航行。','bad');} }
+  }
+  trailAcc+=dDays;
+  if(trailAcc>.4){trailAcc=0;trail.push([S.lon,S.lat]);if(trail.length>500)trail.shift();}
+  // 日期
+  const before=Math.floor(S.day);
+  S.day+=dDays;
+  const after=Math.floor(S.day);
+  for(let d=before+1;d<=after;d++){ dailyTick(w); if(screen!=='play'||modal) break; }
+}
+
+function dailyTick(w){
+  if(S.supplies>0){ S.supplies=Math.max(0,S.supplies-.45); if(S.supplies<=0){toast('補給耗盡！船員又餓又累，船速變慢、船體每天受損。快找港口！','bad');} }
+  else S.hull=Math.max(0,S.hull-.3);
+  if(S.supplies>0&&S.supplies<20&&!S.flags.lowSup){S.flags.lowSup=1;toast('補給只剩不到 20%，請規劃靠港。','bad');}
+  S.daysAtSea++;
+  for(const row of S.press) for(let i=0;i<row.length;i++) row[i]*=.97;
+  // 風帶知識
+  const zk=w.zone.key;
+  if(zk==='trade'||zk==='doldrums'||zk==='westerly'||zk==='monsoon') unlockConcept(zk);
+  if(zk==='doldrums'&&!S.flags.dolTip){S.flags.dolTip=1;toast('進入赤道無風帶，風很弱。把帆開到 100%，往南撐過去就會遇到東南信風。');}
+  if(S.lat<-3&&S.lat>-30&&S.lon>-40&&S.lon<15&&!S.flags.voltaTip){S.flags.voltaTip=1;toast('航海小訣竅：東南信風會把船往西北吹。像葡萄牙船長一樣，先往西南繞向巴西，到南緯 35 度再乘西風往東，就能到好望角！','learn');}
+  const d=Math.floor(S.day);
+  // 結束
+  const left=CFG.TOTAL_DAYS-d;
+  if(left===120||left===45) toast(`距離航程結束只剩 ${left} 天！記得把貨物賣掉換成金幣。`,'bad');
+  if(d>=CFG.TOTAL_DAYS){ endGame(); return; }
+  // 壞血病
+  if(S.daysAtSea>=100&&!S.flags.scurvy){
+    S.flags.scurvy=1; unlockConcept('scurvy',true);
+    openEvent('壞血病爆發','已經在海上 100 天沒有靠港，船員吃不到新鮮蔬果，開始牙齦出血、全身無力。船速下降了！趕快找最近的港口補給。',[{label:'了解，找港口'}]);
+    return;
+  }
+  if(S.hull<50&&!S.flags.hullTip){
+    S.flags.hullTip=1;
+    const rp=nearestRepair();
+    if(rp!=null){ if(S.target==null) S.target=rp; toast(`船體只剩 ${Math.round(S.hull)}%！最近可以修船的港口是「${PORTS[rp].name}」${S.target===rp?'，已幫你設為目的地':''}。地圖上有金色「修」字的港口都能修船。`,'bad'); }
+  }
+  if(S.hull<=0){ shipwreck(); return; }
+  // 隨機事件
+  const lon=S.lon,lat=S.lat,doy=dayOfYear(S.day);
+  let pStorm=.003;
+  if(lat<-30&&lon>5&&lon<45) pStorm=.025;
+  if(lon>108&&lon<132&&lat>8&&lat<32&&doy>=180&&doy<=300) pStorm=.018;
+  if(Math.random()<pStorm){ storm(lat<-30&&lon>5&&lon<45?'cape':(lon>108&&lon<132&&lat>8?'typhoon':'sea')); return; }
+  let pPirate=0,kind='';
+  if(lon>97&&lon<106&&lat>-2&&lat<7){pPirate=.012;kind='strait';}
+  else if(lon>112&&lon<123&&lat>20&&lat<27){pPirate=.01;kind='east';}
+  else if(lon>-90&&lon<-60&&lat>10&&lat<27){pPirate=.009;kind='carib';}
+  if(pPirate&&Math.random()<pPirate&&S.gold>100){ pirates(kind); return; }
+}
+
+function storm(kind){
+  const full=S.sail>.7;
+  let dmg=Math.round(rnd(8,18)*(full?1.5:1));
+  S.hull=Math.max(0,S.hull-dmg);
+  unlockConcept('storm',true);
+  const title={cape:'好望角的暴風',typhoon:'颱風來襲',sea:'海上暴風雨'}[kind];
+  const lead={cape:'巨浪從南方打來，這裡果然是「暴風角」！',typhoon:'夏秋季節，南海和臺灣附近常有颱風。',sea:'天色突然變黑，狂風大作。'}[kind];
+  const body=`${lead}船體受損 ${dmg}%${full?'（滿帆遇上暴風，損傷加倍！下次可以先把帆收小）':''}。`;
+  if(S.hull<=0){ shipwreck(); return; }
+  openEvent(title,body,[{label:'繼續航行'}]);
+}
+function pirates(kind){
+  unlockConcept('pirate',true);
+  const toll=Math.max(50,Math.round(S.gold*.15));
+  const desc={strait:'麻六甲海峽是東西方貿易的咽喉，一艘海盜船攔住了你！',east:'一支武裝海商的船隊攔下你，要求繳交「通行費」。當時臺灣海峽一帶有許多這樣的海上勢力。',carib:'加勒比海的私掠船盯上了你！私掠船是得到國王允許、專門搶劫敵國船隻的船。'}[kind];
+  const chance=Math.round((.35+.5*S.sail)*100);
+  openEvent('海盜出現！',desc,[
+    {label:`繳交 ${toll} 金幣`,fn:()=>{S.gold-=toll;toast(`你繳了 ${toll} 金幣，平安通過。`);}},
+    {label:`全速逃跑（成功率 ${chance}%）`,primary:true,fn:()=>{
+      if(Math.random()*100<chance){toast('成功甩開了！滿帆的船跑得比較快。','good');}
+      else{
+        let lost=0;for(const k in S.cargo){const c=S.cargo[k];const n=Math.ceil(c.n*.4);c.cost-=c.cost/c.n*n;c.n-=n;lost+=n;if(c.n<=0)delete S.cargo[k];}
+        S.hull=Math.max(1,S.hull-15);
+        toast(`逃跑失敗！被搶走 ${lost} 箱貨物，船體受損 15%。`,'bad');
+      }
+    }},
+  ]);
+}
+function shipwreck(){
+  let lost=cargoUsed(); S.cargo={};
+  const p=PORTS[S.lastPort];
+  S.lon=p.lon;S.lat=p.lat;S.hull=60;S.supplies=Math.max(S.supplies,60);S.daysAtSea=0;S.flags.scurvy=0;
+  S.day=Math.min(S.day+20,CFG.TOTAL_DAYS-1); trail=[];
+  openEvent('船難！','船體撐不住，在海上解體了。船員被路過的船救起，花了 20 天才回到上一個港口「'+p.name+'」。'+(lost?`船上 ${lost} 箱貨物全部沉入海底。`:'')+'重新修好的舊船只剩 60% 船體。',[{label:'重新出發'}]);
+}
+function unlockConcept(id,quiet){
+  if(S.concepts[id])return;
+  S.concepts[id]=S.day|0;
+  const c=CONCEPTS[CI[id]];
+  if(!quiet) toast(`新知識卡：「${c.name}」——${c.text.slice(0,34)}…（航海日誌可看全文）`,'learn');
+}
+
+/* =================== 繪圖 =================== */
+const cv=$('#map'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+const COL={};
+function readColors(){const cs=getComputedStyle(document.documentElement);for(const k of['sea','sea-deep','sea-line','vellum','vellum-ink','brass','text','muted','good','bad','pt','es','nl','jp','local','none'])COL[k]=cs.getPropertyValue('--'+k).trim();}
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);}
+function zoomK(){return zoomIdx===0?Math.max(W,H)/34:zoomIdx===1?Math.max(W,H)/80:W/360;}
+let cam={lon:-10,lat:38,k:20};
+const REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function toScreen(lon,lat){let dx=wrapLon(lon-cam.lon);return [W/2+dx*cam.k,H/2-(lat-cam.lat)*cam.k];}
+
+function draw(t){
+  const st=S||{lon:-14,lat:34,heading:225,day:60};
+  const k=zoomK(); cam.k=k; cam.lon=st.lon;
+  const halfH=H/2/k; const lo=-62+halfH, hi=74-halfH;
+  cam.lat=lo<hi?clamp(st.lat,lo,hi):6;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  // 海
+  const g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.75);
+  g.addColorStop(0,COL.sea);g.addColorStop(1,COL['sea-deep']);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // 羅盤恆向線
+  if(zoomIdx<2){
+    for(const[rl,rt]of[[-38,28],[68,-28],[160,18],[-150,-20],[-30,-30],[100,40]]){
+      const [x,y]=toScreen(rl,rt); if(x<-1400||x>W+1400||y<-1400||y>H+1400)continue;
+      for(let i=0;i<16;i++){const a=i*Math.PI/8;ctx.strokeStyle=i%2?'rgba(227,168,60,.07)':'rgba(228,213,174,.07)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(a)*1600,y+Math.sin(a)*1600);ctx.stroke();}
+      drawRose(x,y,zoomIdx===0?46:30);
+    }
+  }
+  // 經緯線
+  ctx.lineWidth=1;
+  for(let lat=-60;lat<=75;lat+=15){const y=H/2-(lat-cam.lat)*k;ctx.strokeStyle='rgba(157,180,177,.08)';ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  const lon0=Math.floor((cam.lon-W/2/k)/15)*15;
+  for(let lon=lon0;lon<=cam.lon+W/2/k;lon+=15){const x=W/2+(lon-cam.lon)*k;ctx.strokeStyle='rgba(157,180,177,.08)';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  ctx.font='500 12px '+getFont();ctx.textAlign='left';ctx.textBaseline='bottom';
+  for(const[lat,name,dash]of[[0,'赤道',[10,6]],[23.44,'北回歸線',[3,6]],[-23.44,'南回歸線',[3,6]]]){
+    const y=H/2-(lat-cam.lat)*k; if(y<0||y>H)continue;
+    ctx.strokeStyle=lat===0?'rgba(227,168,60,.45)':'rgba(227,168,60,.28)';ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(227,168,60,.75)';ctx.fillText(name,12,y-3);
+  }
+  // 風
+  drawWind(t,st.day||0);
+  // 陸地
+  for(const off of[-360,0,360]){
+    const ox=W/2+(off-cam.lon)*k;
+    if(ox+180*k<-10||ox-180*k>W+10)continue;
+    ctx.setTransform(DPR*k,0,0,-DPR*k,DPR*ox,DPR*(H/2+cam.lat*k));
+    ctx.lineJoin='round';
+    ctx.strokeStyle='rgba(120,170,165,.18)';ctx.lineWidth=7/k;
+    for(const p of LAND_PATHS)ctx.stroke(p);
+    ctx.fillStyle=COL.vellum;
+    for(const p of LAND_PATHS)ctx.fill(p);
+    ctx.strokeStyle=COL['vellum-ink'];ctx.lineWidth=1.3/k;
+    for(const p of LAND_PATHS)ctx.stroke(p);
+  }
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  // 地名
+  drawLabels();
+  // 航跡
+  if(S&&trail.length>1){
+    ctx.strokeStyle='rgba(238,242,236,.45)';ctx.lineWidth=1.6;ctx.setLineDash([4,5]);ctx.beginPath();
+    let prev=null;
+    for(const[lo,la]of trail){const[x,y]=toScreen(lo,la);if(!prev||Math.abs(x-prev[0])>W)ctx.moveTo(x,y);else ctx.lineTo(x,y);prev=[x,y];}
+    const[sx,sy]=toScreen(S.lon,S.lat);if(prev&&Math.abs(sx-prev[0])<W)ctx.lineTo(sx,sy);
+    ctx.stroke();ctx.setLineDash([]);
+  }
+  // 港口
+  drawPorts(t);
+  // 船
+  if(S){const[sx,sy]=toScreen(S.lon,S.lat);drawShip(sx,sy,S.heading,zoomIdx===2?14:20,t);drawTarget(sx,sy);}
+}
+let DFONT=null;function getDFont(){return DFONT||(DFONT=getComputedStyle(document.documentElement).getPropertyValue('--f-display'));}
+let FONT=null;function getFont(){return FONT||(FONT=getComputedStyle(document.documentElement).getPropertyValue('--f-body'));}
+function drawRose(x,y,r){
+  ctx.save();ctx.translate(x,y);
+  ctx.strokeStyle='rgba(227,168,60,.28)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
+  for(let i=0;i<8;i++){const a=i*Math.PI/4, L=i%2?r*.55:r;ctx.fillStyle=i%2?'rgba(228,213,174,.12)':'rgba(227,168,60,.22)';ctx.beginPath();ctx.moveTo(Math.sin(a)*L,-Math.cos(a)*L);ctx.lineTo(Math.sin(a+.35)*r*.16,-Math.cos(a+.35)*r*.16);ctx.lineTo(0,0);ctx.closePath();ctx.fill();}
+  ctx.restore();
+}
+function drawWind(t,day){
+  const k=cam.k, sp=zoomIdx===0?4:zoomIdx===1?8:15;
+  const lonA=Math.floor((cam.lon-W/2/k)/sp)*sp, lonB=cam.lon+W/2/k;
+  const latA=Math.floor((cam.lat-H/2/k)/sp)*sp, latB=cam.lat+H/2/k;
+  const ph=REDUCED?0:(t/1000*.7)%1;
+  ctx.lineWidth=1.4;ctx.lineCap='round';
+  for(let lon=lonA;lon<=lonB;lon+=sp)for(let lat=latA;lat<=latB;lat+=sp){
+    if(lat<-60||lat>72)continue;
+    const ln=lon+sp/2,lt=lat+sp/2; if(inLand(ln,lt))continue;
+    const w=windAt(ln,lt,day);const x=W/2+(ln-cam.lon)*k,y=H/2-(lt-cam.lat)*k;
+    const L=5+w.kn*(zoomIdx===2?.45:.9), r=w.to*Math.PI/180, dx=Math.sin(r), dy=-Math.cos(r);
+    const sh=(ph+((ln*7+lt*13)%10)/10)%1*8-4;
+    const x0=x+dx*sh-dx*L/2, y0=y+dy*sh-dy*L/2, x1=x0+dx*L, y1=y0+dy*L;
+    ctx.strokeStyle='rgba(190,215,210,.22)';
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);
+    ctx.moveTo(x1,y1);ctx.lineTo(x1-dx*4-dy*3,y1-dy*4+dx*3);
+    ctx.moveTo(x1,y1);ctx.lineTo(x1-dx*4+dy*3,y1-dy*4-dx*3);ctx.stroke();
+  }
+}
+const LABELS=[['大西洋',-38,30,1],['大西洋',-18,-22,1],['印度洋',76,-14,1],['太平洋',-140,12,1],['太平洋',168,22,1],['南海',114,14,1],['歐洲',15,50,0],['非洲',20,6,0],['亞洲',92,45,0],['北美洲',-102,44,0],['南美洲',-60,-12,0],['澳洲',134,-25,0]];
+function drawLabels(){
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  const fs=zoomIdx===2?13:zoomIdx===1?17:22;
+  for(const[n,lo,la,sea]of LABELS){
+    const[x,y]=toScreen(lo,la);if(x<-100||x>W+100||y<-50||y>H+50)continue;
+    ctx.font=`${sea?'600':'900'} ${sea?fs:fs-2}px ${getDFont()}`;
+    try{ctx.letterSpacing=sea?'0.5em':'0.3em';}catch(e){}
+    ctx.fillStyle=sea?'rgba(190,215,210,.32)':'rgba(74,58,34,.5)';
+    ctx.fillText(n,x,y);
+  }
+  try{ctx.letterSpacing='0px';}catch(e){}
+}
+function drawPorts(t){
+  const small=zoomIdx===2;
+  ctx.textBaseline='middle';
+  PORTS.forEach((p,i)=>{
+    const[x,y]=toScreen(p.lon,p.lat); if(x<-60||x>W+60||y<-30||y>H+30)return;
+    const visited=S&&S.visited[i];
+    const r=small?4:6;
+    if(S&&!visited&&!REDUCED){const pr=(t/1200+i*.13)%1;ctx.strokeStyle=`rgba(227,168,60,${.6*(1-pr)})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,r+3+pr*12,0,Math.PI*2);ctx.stroke();}
+    ctx.fillStyle=COL[p.nat]||COL.none;ctx.strokeStyle=COL.vellum;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+    if(visited){ctx.fillStyle=COL.vellum;ctx.beginPath();ctx.arc(x,y,r*.38,0,Math.PI*2);ctx.fill();}
+    const fs=small?11:14;
+    ctx.font=`700 ${fs}px ${getFont()}`;ctx.textAlign='left';
+    ctx.lineWidth=4;ctx.strokeStyle='rgba(9,29,36,.85)';ctx.strokeText(p.name,x+r+5,y);
+    ctx.fillStyle=COL.text;ctx.fillText(p.name,x+r+5,y);
+    if(!p.waterOnly&&!small){
+      const tx=x+r+9+ctx.measureText(p.name).width, hurt=S&&S.hull<60;
+      ctx.fillStyle=hurt?COL.brass:'rgba(227,168,60,.35)';
+      ctx.beginPath();ctx.roundRect?ctx.roundRect(tx,y-9,18,18,4):ctx.rect(tx,y-9,18,18);ctx.fill();
+      ctx.fillStyle=hurt?'#2b1d05':COL.text;ctx.font=`700 12px ${getFont()}`;ctx.textAlign='center';ctx.fillText('修',tx+9,y+1);
+    }
+  });
+}
+function drawShip(x,y,hd,s,t){
+  ctx.save();ctx.translate(x,y);
+  const bobv=REDUCED?0:Math.sin(t/400)*.04;
+  ctx.rotate(hd*Math.PI/180+bobv);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(2,3,s*.5,s*.95,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.moveTo(0,-s);ctx.quadraticCurveTo(s*.5,-s*.3,s*.36,s*.55);ctx.lineTo(s*.26,s*.85);ctx.lineTo(-s*.26,s*.85);ctx.lineTo(-s*.36,s*.55);ctx.quadraticCurveTo(-s*.5,-s*.3,0,-s);ctx.closePath();
+  ctx.fillStyle='#7a4b27';ctx.fill();ctx.strokeStyle=COL.vellum;ctx.lineWidth=1.5;ctx.stroke();
+  const bow=S?S.sail*s*.22:0;
+  ctx.strokeStyle='#f4ecd6';ctx.lineCap='round';
+  ctx.lineWidth=s*.2;ctx.beginPath();ctx.moveTo(-s*.62,-s*.15);ctx.quadraticCurveTo(0,-s*.15-bow,s*.62,-s*.15);ctx.stroke();
+  ctx.lineWidth=s*.16;ctx.beginPath();ctx.moveTo(-s*.48,s*.35);ctx.quadraticCurveTo(0,s*.35-bow*.8,s*.48,s*.35);ctx.stroke();
+  if(S){ctx.fillStyle=COL[S.nation];ctx.beginPath();ctx.moveTo(0,-s*.55);ctx.lineTo(s*.32,-s*.68);ctx.lineTo(0,-s*.8);ctx.closePath();ctx.fill();}
+  ctx.restore();
+}
+function drawTarget(sx,sy){
+  if(S.target==null)return;
+  const p=PORTS[S.target];const[x,y]=toScreen(p.lon,p.lat);
+  const m=40, onScreen=x>m&&x<W-m&&y>120&&y<H-170;
+  ctx.strokeStyle=COL.brass;ctx.lineWidth=2.5;
+  if(onScreen){ctx.setLineDash([5,5]);ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);return;}
+  const b=bearing(S.lon,S.lat,p.lon,p.lat)*Math.PI/180;
+  const dx=Math.sin(b),dy=-Math.cos(b);
+  const R=Math.min(W*.42,(H-200)*.5,190);
+  const ax=sx+dx*R, ay=sy+dy*R;
+  ctx.save();ctx.translate(ax,ay);ctx.rotate(b);
+  ctx.fillStyle=COL.brass;ctx.beginPath();ctx.moveTo(0,-14);ctx.lineTo(10,6);ctx.lineTo(0,1);ctx.lineTo(-10,6);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+/* =================== 介面 =================== */
+function toast(msg,kind){
+  const el=document.createElement('div');el.className='toast'+(kind?' '+kind:'');el.textContent=msg;
+  const box=$('#toasts');box.prepend(el);while(box.children.length>3)box.lastChild.remove();
+  setTimeout(()=>el.remove(),kind==='learn'?6500:4200);
+}
+function natBadge(n){return `<span class="badge" style="color:var(--${n})"><span class="dot" style="background:var(--${n})"></span>${NATION[n].name}</span>`;}
+let hudAt=0;
+function updateHUD(force){
+  const now=performance.now(); if(!force&&now-hudAt<120)return; hudAt=now;
+  if(!S)return;
+  $('#hDate').textContent=dateStr(S.day);
+  $('#hLeft').textContent=`剩 ${Math.max(0,CFG.TOTAL_DAYS-Math.floor(S.day))} 天`;
+  $('#hGold').textContent=fmt(S.gold);
+  $('#hCargo').textContent=`${cargoUsed()}/${CFG.CARGO_MAX}`;
+  const sup=Math.round(S.supplies),hull=Math.round(S.hull);
+  $('#hSup').textContent=sup+'%';$('#hHull').textContent=hull+'%';
+  const sb=$('#hSupBar'),hb=$('#hHullBar');
+  sb.style.width=sup+'%';sb.style.background=sup<20?'var(--bad)':sup<45?'var(--warn)':'var(--good)';
+  hb.style.width=hull+'%';hb.style.background=hull<30?'var(--bad)':hull<60?'var(--warn)':'var(--good)';
+  $('#hHead').textContent=Math.round(S.heading)+'°';$('#hHeadName').textContent=dirName(S.heading);
+  $('#wheel').setAttribute('transform',`rotate(${wheelRot})`);
+  $('#hSail').textContent=Math.round(S.sail*100)+'%';$('#hSailBar').style.width=S.sail*100+'%';
+  $('#hSpeed').textContent=`船速 ${((S.speed||0)*60/24).toFixed(1)} 節`;
+  const w=windAt(S.lon,S.lat,S.day);
+  $('#windArrow').setAttribute('transform',`rotate(${w.to+180})`);
+  $('#hWind').textContent=`${dirName(w.to+180)}風・${windWord(w.kn)} ${Math.round(w.kn)} 節`;
+  $('#hZone').textContent=w.zone.name;
+  const f=polar(angDiff(S.heading,w.to)), tip=$('#hTip');
+  if(S.sail===0){tip.textContent='已收帆，船停著';tip.className='';}
+  else if(f>=.85){tip.textContent='順風！帆鼓滿了';tip.className='good';}
+  else if(f>=.5){tip.textContent='斜逆風，速度變慢';tip.className='';}
+  else{tip.textContent='逆風！轉個角度斜著走';tip.className='bad';}
+  // 目的地
+  const tg=$('#tgt');
+  if(S.target!=null){const p=PORTS[S.target];const d=distDeg(S.lon,S.lat,p.lon,p.lat)*60;tg.hidden=false;$('#tgtText').textContent=`目的地：${p.name}・約 ${fmt(d)} 海里・往${dirName(bearing(S.lon,S.lat,p.lon,p.lat))}`;}
+  else tg.hidden=true;
+  // 進港
+  const near=nearestPort();
+  const db=$('#dockBtn');
+  if(near!=null&&!modal){db.hidden=false;db.textContent=`進入「${PORTS[near].name}」港 ›`;db.dataset.pi=near;}
+  else db.hidden=true;
+}
+function nearestRepair(){let best=null,bd=1e9;PORTS.forEach((p,i)=>{if(p.waterOnly)return;if(p.id==='nagasaki'&&S.nation==='es')return;const d=distDeg(S.lon,S.lat,p.lon,p.lat);if(d<bd){bd=d;best=i;}});return best;}
+function nearestPort(){let best=null,bd=3.2;PORTS.forEach((p,i)=>{const d=distDeg(S.lon,S.lat,p.lon,p.lat);if(d<bd){bd=d;best=i;}});return best;}
+
+/* 舵輪 */
+let wheelRot=0,drag=null;
+const helm=$('#helm');
+function ptrAng(e){const r=helm.getBoundingClientRect();return Math.atan2(e.clientX-(r.left+r.width/2),-(e.clientY-(r.top+r.height/2)))*180/Math.PI;}
+helm.addEventListener('pointerdown',e=>{helm.setPointerCapture(e.pointerId);drag=ptrAng(e);e.preventDefault();});
+helm.addEventListener('pointermove',e=>{if(drag==null||!S||!running())return;const a=ptrAng(e);const d=angDiff(a,drag);drag=a;wheelRot+=d;S.heading=(S.heading+d*.7+360)%360;});
+const endDrag=()=>{drag=null;};
+helm.addEventListener('pointerup',endDrag);helm.addEventListener('pointercancel',endDrag);
+function holdBtn(el,val){
+  const on=e=>{e.preventDefault();el.setPointerCapture&&el.setPointerCapture(e.pointerId);input.turn=val;el.classList.add('on');};
+  const off=()=>{if(input.turn===val)input.turn=0;el.classList.remove('on');};
+  el.addEventListener('pointerdown',on);el.addEventListener('pointerup',off);el.addEventListener('pointercancel',off);el.addEventListener('lostpointercapture',off);
+}
+holdBtn($('#tL'),-1);holdBtn($('#tR'),1);
+function setSail(v){if(!S)return;S.sail=clamp(Math.round(v*10)/10,0,1);updateHUD(true);}
+$('#sMinus').onclick=()=>setSail(S.sail-.1);
+$('#sPlus').onclick=()=>setSail(S.sail+.1);
+$('#bZoom').onclick=()=>{zoomIdx=(zoomIdx+1)%3;$('#bZoom').textContent='視野：'+ZOOM_NAMES[zoomIdx];};
+$('#bLog').onclick=()=>openLog('ports');
+$('#bPause').onclick=()=>openPause();
+$('#dockBtn').onclick=()=>openPort(+$('#dockBtn').dataset.pi);
+$('#tgtClear').onclick=()=>{S.target=null;updateHUD(true);};
+
+/* 點海圖設定目的地 */
+let tapStart=null;
+cv.addEventListener('pointerdown',e=>{tapStart=[e.clientX,e.clientY];});
+cv.addEventListener('pointerup',e=>{
+  if(!tapStart||!S||screen!=='play'||modal)return;
+  if(Math.hypot(e.clientX-tapStart[0],e.clientY-tapStart[1])>12)return;
+  const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  let best=null,bd=30;
+  PORTS.forEach((p,i)=>{const[x,y]=toScreen(p.lon,p.lat);const d=Math.hypot(x-mx,y-my);if(d<bd){bd=d;best=i;}});
+  if(best!=null){S.target=best;toast(`目的地設為「${PORTS[best].name}」，跟著金色箭頭航行。`);updateHUD(true);}
+});
+
+/* 鍵盤 */
+const keysDown=new Set();
+window.addEventListener('keydown',e=>{
+  if(screen!=='play')return;
+  const tag=(e.target&&e.target.tagName)||'';if(tag==='INPUT')return;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();
+  if(modal){ if(e.key==='Escape'){ if(modal==='port')closePort(); else if(modal==='log')closeLog(); else if(modal==='board')closeOverlay('board'); else if(modal==='pause')closePause(); } return; }
+  keysDown.add(e.key);
+  if(e.key==='ArrowUp')setSail(S.sail+.1);
+  if(e.key==='ArrowDown')setSail(S.sail-.1);
+  if(e.key==='Enter'){const n=nearestPort();if(n!=null)openPort(n);}
+  if(e.key===' '||e.key==='p')openPause();
+  syncKeyTurn();
+});
+window.addEventListener('keyup',e=>{keysDown.delete(e.key);syncKeyTurn();});
+window.addEventListener('blur',()=>{keysDown.clear();syncKeyTurn();input.turn=0;});
+function syncKeyTurn(){input.keyTurn=(keysDown.has('ArrowRight')?1:0)-(keysDown.has('ArrowLeft')?1:0);}
+
+function running(){return screen==='play'&&!modal;}
+function showOverlay(id){$('#'+id).hidden=false;}
+function closeOverlay(id){$('#'+id).hidden=true;if(modal===id)modal=null;updateHUD(true);}
+
+/* =================== 港口 =================== */
+let portIdx=null,portTab='market',quizOrder=null;
+function openPort(pi){
+  const p=PORTS[pi];
+  if(p.id==='nagasaki'&&S.nation==='es'){
+    openEvent('長崎拒絕入港','1624 年起，日本德川幕府和西班牙斷絕往來，西班牙船不能進入日本港口。你只能離開。（日本擔心西班牙傳教士帶來的影響）',[{label:'離開'}]);
+    return;
+  }
+  const r=REL[relation(p.nat)];
+  const fee=Math.min(r.fee,S.gold); S.gold-=fee;
+  S.daysAtSea=0; S.flags.scurvy=0; S.flags.lowSup=0; S.lastPort=pi;
+  const first=!S.visited[pi]; S.visited[pi]=1;
+  if(S.target===pi) S.target=null;
+  portIdx=pi; portTab=first?'story':((p.supplyOnly||S.hull<60||S.supplies<30)?'service':'market'); quizOrder=null;
+  modal='port'; input.turn=0;
+  renderPort(); showOverlay('port');
+  if(fee) toast(`繳交入港費 ${fee} 金幣。`);
+  if(first) toast(`獲得知識卡：「${p.name}」`,'learn');
+  save();
+}
+function closePort(){closeOverlay('port');portIdx=null;save();}
+function renderPort(){
+  const p=PORTS[portIdx], rel=relation(p.nat), r=REL[rel];
+  const tabs=[];
+  if(!p.supplyOnly) tabs.push(['market','市場']);
+  tabs.push(['service',p.waterOnly?'取水':'補給・修船'],['story','港口故事'+(S.quiz[portIdx]==null?'・問答':'')]);
+  let body='';
+  if(portTab==='market') body=renderMarket(p);
+  else if(portTab==='service') body=renderService(p,rel);
+  else body=renderStory(p);
+  const quick=portTab!=='service'?quickStrip(p,rel):'';
+  $('#portSheet').innerHTML=`
+    <div class="sticky-top"><div class="sheet-head"><div><h2>${esc(p.name)}</h2><div class="sub">${esc(p.sub)}・${dateStr(S.day)}</div></div>
+      <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px">${natBadge(p.nat)}</div></div>
+    <div class="tabs" role="tablist">${tabs.map(([k,n])=>`<button role="tab" data-tab="${k}" class="${portTab===k?'on':''}">${n}</button>`).join('')}</div></div>
+    <div class="sheet-body">${quick}
+      <div class="statline"><span>金幣 <b style="color:var(--brass)">${fmt(S.gold)}</b></span><span>貨艙 <b>${cargoUsed()}/${CFG.CARGO_MAX}</b></span><span>補給 <b>${Math.round(S.supplies)}%</b></span><span>船體 <b>${Math.round(S.hull)}%</b></span></div>
+      <div class="note">${esc(r.label)}</div>
+      ${body}
+    </div>
+    <div class="sheet-foot"><button class="btn" data-act="log">航海日誌</button><button class="btn primary" data-act="leave">出港 ›</button></div>`;
+}
+function renderMarket(p){
+  const rows=GOODS.map((g,gi)=>{
+    const bp=priceBuy(portIdx,gi), sp=priceSell(portIdx,gi), c=S.cargo[g.id];
+    const own=c?c.n:0, avg=c?Math.round(c.cost/c.n):null;
+    const cmp=avg!=null&&sp!=null?(sp>avg?'up':sp<avg?'down':''):'';
+    const canBuy=bp!=null&&S.gold>=bp&&cargoUsed()<CFG.CARGO_MAX;
+    return {gi,bp,html:`<div class="mrow ${bp!=null?'cheap':''}">
+      <div class="g"><span class="sw" style="background:${g.col}"></span><div><b>${g.name}</b>${bp!=null?' <span class="badge" style="color:var(--brass);font-size:11px;padding:1px 7px">本地產</span>':''}<small>${g.desc}</small></div></div>
+      <div class="mcell"><small>買價</small><b>${bp!=null?bp:'—'}</b></div>
+      <div class="mcell"><small>賣價</small><b class="${cmp}">${sp}</b></div>
+      <div class="mcell"><small>持有${avg!=null?'・成本 '+avg:''}</small><b>${own}</b></div>
+      <div class="mbtns">
+        <button class="b" data-act="buy" data-g="${gi}" data-n="1" ${canBuy?'':'disabled'}>買 1</button>
+        <button class="b" data-act="buy" data-g="${gi}" data-n="10" ${canBuy?'':'disabled'}>買 10</button>
+        <button class="s" data-act="sell" data-g="${gi}" data-n="1" ${own?'':'disabled'}>賣 1</button>
+        <button class="s" data-act="sell" data-g="${gi}" data-n="999" ${own?'':'disabled'}>全賣</button>
+      </div></div>`};
+  });
+  rows.sort((a,b)=>(a.bp==null)-(b.bp==null));
+  return `<div class="note">金框是這個港口出產的便宜商品。賣價<span class="up">綠色</span>代表比你的成本高、會賺錢。同一種貨一次賣太多，價格會下跌，過一陣子才會回升。</div>
+    <div class="mhead"><span>商品</span><span>買價</span><span>賣價</span><span>持有</span><span></span></div>
+    <div class="market">${rows.map(r=>r.html).join('')}</div>`;
+}
+function quickStrip(p,rel){
+  const needS=S.supplies<99, needH=!p.waterOnly&&S.hull<99;
+  if(!needS&&!needH) return '';
+  const cs=Math.ceil((100-S.supplies)*serviceCost(rel,'sup')), ch=Math.ceil((100-S.hull)*serviceCost(rel,'hull'));
+  return `<div class="quick"><span>出港前別忘了：補給 ${Math.round(S.supplies)}%${p.waterOnly?'':`、船體 ${Math.round(S.hull)}%`}</span>
+    ${needS?`<button class="btn" data-act="sup">補滿補給（${fmt(Math.min(cs,S.gold))}）</button>`:''}
+    ${needH?`<button class="btn" data-act="hull">修好船體（${fmt(Math.min(ch,S.gold))}）</button>`:''}</div>`;
+}
+function serviceCost(rel,kind){const p=PORTS[portIdx];let c=kind==='sup'?(p.waterOnly?1.5:3):4;if(rel==='own')c*=.8;if(rel==='enemy')c*=1.25;return c;}
+function renderService(p,rel){
+  const sc=serviceCost(rel,'sup'), hc=serviceCost(rel,'hull');
+  const needS=100-S.supplies, needH=100-S.hull;
+  const costS=Math.ceil(needS*sc), costH=Math.ceil(needH*hc);
+  return `<div class="svc">
+    <div class="svc-card"><h3>${p.waterOnly?'取淡水、打獵補給':'補給糧食與淡水'}</h3>
+      <div class="meter"><em style="width:${S.supplies}%"></em></div>
+      <div class="note">目前 ${Math.round(S.supplies)}%。每 1% 約 ${sc.toFixed(1)} 金幣。滿補給大約可航行 220 天。</div>
+      <button class="btn primary" data-act="sup" ${needS<1||S.gold<sc?'disabled':''}>${needS<1?'已經滿了':`補滿（${fmt(Math.min(costS,S.gold))} 金幣）`}</button></div>
+    <div class="svc-card"><h3>修理船體</h3>
+      <div class="meter"><em style="width:${S.hull}%;background:var(--warn)"></em></div>
+      ${p.waterOnly?'<div class="note">這裡還沒有港口城鎮（荷蘭人 1652 年才在這裡建城），沒有船塢可以修船。</div>':`<div class="note">目前 ${Math.round(S.hull)}%。每 1% 約 ${hc.toFixed(1)} 金幣。船體低於 30% 船速會變慢，歸零就會沉船！</div>
+      <button class="btn primary" data-act="hull" ${needH<1||S.gold<hc?'disabled':''}>${needH<1?'船況良好':`修好（${fmt(Math.min(costH,S.gold))} 金幣）`}</button>`}</div>
+  </div>`;
+}
+// 港口插圖：放在 img/港口代號.jpg，找不到圖片時自動隱藏
+function portImg(p){return `<img class="pimg" src="img/${p.id}.jpg" alt="${esc(p.name)}插圖" loading="lazy" onerror="this.remove()">`;}
+function renderStory(p){
+  const res=S.quiz[portIdx];
+  if(!quizOrder) quizOrder=shuffle([0,1,2]);
+  let q='';
+  if(res==null){
+    q=`<div class="quiz"><div class="q">問答：${esc(p.q)}</div>${quizOrder.map(i=>`<button class="opt" data-act="ans" data-i="${i}">${esc(p.opts[i])}</button>`).join('')}<div class="note">答對可以獲得 ${CFG.QUIZ_BONUS} 金幣獎勵（每個港口只能答一次）。</div></div>`;
+  } else {
+    q=`<div class="quiz"><div class="q">問答：${esc(p.q)}</div>${quizOrder.map(i=>`<button class="opt ${i===0?'right':(res.pick===i?'wrong':'')}" disabled>${esc(p.opts[i])}</button>`).join('')}
+      <div class="result ${res.ok?'ok':'no'}">${res.ok?`答對了！獲得 ${CFG.QUIZ_BONUS} 金幣。`:'答錯了，正確答案是「'+esc(p.opts[0])+'」。'}${esc(p.exp)}</div></div>`;
+  }
+  return `<div class="story">${portImg(p)}<h3>${esc(p.name)}・${esc(p.sub)}</h3>${esc(p.info)}</div>${q}`;
+}
+$('#portSheet').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.tab){portTab=b.dataset.tab;renderPort();return;}
+  const act=b.dataset.act;
+  if(act==='leave'){closePort();return;}
+  if(act==='log'){openLog('ports',true);return;}
+  if(act==='buy'){const r=doBuy(portIdx,+b.dataset.g,+b.dataset.n);if(!r.done)toast(cargoUsed()>=CFG.CARGO_MAX?'貨艙滿了！':'金幣不夠。','bad');}
+  if(act==='sell'){const r=doSell(portIdx,+b.dataset.g,+b.dataset.n);if(r.done)toast(`賣出 ${r.done} 箱${GOODS[+b.dataset.g].name}，得到 ${fmt(r.got)} 金幣。`,'good');}
+  if(act==='sup'){const rel=relation(PORTS[portIdx].nat),c=serviceCost(rel,'sup');const n=Math.min(100-S.supplies,Math.floor(S.gold/c));S.supplies+=n;S.gold-=Math.ceil(n*c);if(S.supplies>99.5)S.supplies=100;}
+  if(act==='hull'){const rel=relation(PORTS[portIdx].nat),c=serviceCost(rel,'hull');const n=Math.min(100-S.hull,Math.floor(S.gold/c));S.hull+=n;S.gold-=Math.ceil(n*c);if(S.hull>99.5)S.hull=100;if(S.hull>=50)S.flags.hullTip=0;}
+  if(act==='ans'){const i=+b.dataset.i,ok=i===0;S.quiz[portIdx]={ok,pick:i};if(ok)S.gold+=CFG.QUIZ_BONUS;}
+  S.gold=Math.max(0,Math.round(S.gold));
+  renderPort();updateHUD(true);save();
+});
+
+/* =================== 航海日誌 =================== */
+let logTab='ports',logReturn=false;
+function openLog(tab,fromPort){logTab=tab;logReturn=!!fromPort;if(fromPort){$('#port').hidden=true;}modal='log';renderLog();showOverlay('log');}
+function closeLog(){$('#log').hidden=true;if(logReturn){modal='port';renderPort();$('#port').hidden=false;}else{modal=null;}updateHUD(true);}
+function renderLog(){
+  let body='';
+  if(logTab==='ports'){
+    body=`<div class="cards">${PORTS.map((p,i)=>{
+      const got=S.visited[i], q=S.quiz[i];
+      return `<div class="card ${got?'got':''}"><h4>${esc(p.name)} ${natBadge(p.nat)}</h4><div class="muted">${esc(p.sub)}</div>
+        ${got?`${portImg(p)}<p>${esc(p.info)}</p>`:'<p class="muted">尚未造訪。航行到這裡就能解鎖這張知識卡。</p>'}
+        <div class="row">${got&&q?`<span class="muted">${q.ok?'問答：答對 ✓':'問答：答錯'}</span>`:''}${!logReturn&&screen==='play'?`<button data-act="target" data-i="${i}">${S.target===i?'目前的目的地':'設為目的地'}</button>`:''}</div></div>`;}).join('')}</div>`;
+  } else {
+    body=`<div class="cards">${CONCEPTS.map(c=>{const got=S.concepts[c.id]!=null;return `<div class="card ${got?'got':''}"><h4>${got?esc(c.name):'？？？'}</h4>${got?`<p>${esc(c.text)}</p>`:'<p class="muted">在航行途中會遇到，遇到就會解鎖。</p>'}</div>`;}).join('')}</div>`;
+  }
+  $('#logSheet').innerHTML=`<div class="sticky-top"><div class="sheet-head"><div><h2>航海日誌</h2><div class="sub">已收集知識卡 ${cardCount()} / ${TOTAL_CARDS}・航行 ${fmt(S.distNm)} 海里</div></div><button class="chip-btn close" data-act="close">關閉</button></div>
+    <div class="tabs"><button data-tab="ports" class="${logTab==='ports'?'on':''}">港口（${Object.keys(S.visited).length}/${PORTS.length}）</button><button data-tab="concepts" class="${logTab==='concepts'?'on':''}">航海知識（${Object.keys(S.concepts).length}/${CONCEPTS.length}）</button></div></div>
+    <div class="sheet-body">${body}</div>`;
+}
+$('#logSheet').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.tab){logTab=b.dataset.tab;renderLog();return;}
+  if(b.dataset.act==='close'){closeLog();return;}
+  if(b.dataset.act==='target'){S.target=+b.dataset.i;toast(`目的地設為「${PORTS[S.target].name}」，跟著金色箭頭航行。`);closeLog();}
+});
+
+/* =================== 事件、暫停 =================== */
+let evtBtns=[];
+function openEvent(title,body,btns){
+  input.turn=0;
+  evtBtns=btns; modal='evt';
+  $('#evtSheet').innerHTML=`<div class="sheet-head"><div><h2>${esc(title)}</h2><div class="sub">${dateStr(S.day)}</div></div></div>
+    <div class="sheet-body"><p style="margin:0;line-height:1.85;font-size:16px">${esc(body)}</p></div>
+    <div class="sheet-foot">${btns.map((b,i)=>`<button class="btn ${b.primary||btns.length===1?'primary':''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div>`;
+  showOverlay('evt'); save();
+}
+$('#evtSheet').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-i]');if(!b)return;
+  const fn=evtBtns[+b.dataset.i].fn;
+  closeOverlay('evt');
+  if(fn)fn();
+  S.gold=Math.max(0,Math.round(S.gold));
+  updateHUD(true);save();
+});
+let confirmEnd=false;
+function openPause(){
+  modal='pause';confirmEnd=false;input.turn=0;renderPause();showOverlay('pause');
+}
+function renderPause(){
+  $('#pauseSheet').innerHTML=`<div class="sheet-head"><div><h2>暫停</h2><div class="sub">${esc(S.player.cls)} 班 ${esc(S.player.seat)} 號・${esc(S.player.nick)}・${NATION[S.nation].name}</div></div></div>
+    <div class="sheet-body"><div class="statline"><span>金幣 <b>${fmt(S.gold)}</b></span><span>目前獲利 <b>${fmt(S.gold-CFG.START_GOLD)}</b></span><span>知識卡 <b>${cardCount()}/${TOTAL_CARDS}</b></span></div>
+    ${confirmEnd?`<div class="result no">確定要現在結算嗎？船上 ${cargoUsed()} 箱沒賣掉的貨物不會算進獲利。</div>`:'<div class="note">提早結算會直接以目前的金幣計算獲利。</div>'}</div>
+    <div class="sheet-foot">${confirmEnd?'<button class="btn" data-act="back">再想想</button><button class="btn danger" data-act="end">確定結算</button>':'<button class="btn danger" data-act="ask">提早結算</button><button class="btn primary" data-act="resume">繼續航行</button>'}</div>`;
+}
+function closePause(){closeOverlay('pause');}
+$('#pauseSheet').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;const a=b.dataset.act;
+  if(a==='resume')closePause();
+  if(a==='ask'){confirmEnd=true;renderPause();}
+  if(a==='back'){confirmEnd=false;renderPause();}
+  if(a==='end'){closeOverlay('pause');endGame();}
+});
+
+/* =================== 結算與排行榜 =================== */
+function endGame(){
+  if(S.ended&&screen==='end')return;
+  S.ended=true;screen='end';
+  for(const id of['port','log','evt','pause'])$('#'+id).hidden=true;
+  modal=null;
+  $('#hud').hidden=true;$('#ctrl').hidden=true;$('#dockBtn').hidden=true;$('#tgt').hidden=true;
+  save(); renderEnd(); showOverlay('end');
+  if(!S.submitted) submitScore();
+}
+function record(){return {cls:S.player.cls,seat:S.player.seat,nick:S.player.nick,nation:NATION[S.nation].name,profit:Math.round(S.gold-CFG.START_GOLD),cards:cardCount(),days:Math.min(CFG.TOTAL_DAYS,Math.floor(S.day)),ts:Date.now()};}
+let submitState='';
+async function submitScore(){
+  const rec=record();
+  const local=lsGet(CFG.BOARD_KEY)||[];local.push(rec);lsSet(CFG.BOARD_KEY,local.slice(-300));
+  S.submitted=true;save();
+  if(CFG.GAS_URL){
+    submitState='uploading';renderEnd();
+    try{await fetch(CFG.GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(rec)});submitState='ok';}
+    catch(e){submitState='fail';}
+  } else submitState='local';
+  renderEnd();
+}
+function renderEnd(){
+  const profit=Math.round(S.gold-CFG.START_GOLD), left=cargoUsed();
+  const msg={uploading:'正在上傳成績…',ok:'成績已上傳到班級排行榜。',fail:'上傳失敗，成績已存在這台平板上。請告訴老師。',local:'成績已記錄在這台平板的排行榜。'}[submitState]||'';
+  $('#endSheet').innerHTML=`<div class="sheet-head"><div><h2>航程結束</h2><div class="sub">${dateStr(Math.min(S.day,CFG.TOTAL_DAYS))}・${esc(S.player.cls)} 班 ${esc(S.player.seat)} 號 ${esc(S.player.nick)}</div></div></div>
+    <div class="sheet-body">
+      <div><span class="lbl">總獲利</span><div class="big" style="color:${profit>=0?'var(--brass)':'var(--bad)'}">${profit>=0?'+':''}${fmt(profit)}</div></div>
+      <div class="statline"><span>最後金幣 <b>${fmt(S.gold)}</b></span><span>知識卡 <b>${cardCount()}/${TOTAL_CARDS}</b></span><span>航行 <b>${fmt(S.distNm)}</b> 海里</span><span>造訪港口 <b>${Object.keys(S.visited).length}</b> 個</span>${left?`<span style="color:var(--bad)">沒賣掉的貨物 <b>${left}</b> 箱</span>`:''}</div>
+      <div class="note">${msg}</div>
+      <div class="story"><h3>想一想，和同學討論</h3><ol class="reflect">
+        <li>歐洲人為什麼願意冒著生命危險，航行半個地球到亞洲？</li>
+        <li>荷蘭人為什麼要在大員建立據點？臺灣有哪些商品吸引他們？</li>
+        <li>在你的航程中，風向和季節怎麼影響了你的路線？</li>
+      </ol></div>
+    </div>
+    <div class="sheet-foot"><button class="btn" data-act="log">我的知識卡</button><button class="btn" data-act="board">排行榜</button><button class="btn primary" data-act="again">再玩一次</button></div>`;
+}
+$('#endSheet').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;const a=b.dataset.act;
+  if(a==='board')openBoard();
+  if(a==='log'){logReturn=false;logTab='ports';renderLog();$('#log').hidden=false;modal='log';}
+  if(a==='again'){lsDel(CFG.SAVE_KEY);location.reload();}
+});
+
+let boardTab='class',boardData=null,boardSrc='';
+async function openBoard(){
+  modal='board';boardData=null;
+  boardTab=(S&&S.player)?'class':'all';
+  renderBoard();showOverlay('board');
+  let rows=null;
+  if(CFG.GAS_URL){try{const r=await fetch(CFG.GAS_URL+'?action=list');const j=await r.json();if(Array.isArray(j.rows)){rows=j.rows;boardSrc='online';}}catch(e){}}
+  if(!rows){rows=lsGet(CFG.BOARD_KEY)||[];boardSrc='local';}
+  boardData=rows;renderBoard();
+}
+function renderBoard(){
+  const me=S&&S.player;
+  let list='<div class="note">讀取中…</div>';
+  if(boardData){
+    const best={};
+    for(const r of boardData){const key=r.cls+'-'+r.seat;const pv=Number(r.profit)||0;if(!best[key]||pv>Number(best[key].profit))best[key]=r;}
+    let rows=Object.values(best);
+    if(boardTab==='class'&&me) rows=rows.filter(r=>String(r.cls)===String(me.cls));
+    rows.sort((a,b)=>Number(b.profit)-Number(a.profit));
+    rows=rows.slice(0,40);
+    list=rows.length?`<div style="overflow-x:auto"><table class="board"><thead><tr><th>名次</th><th>班級座號</th><th>船長</th><th>國家</th><th class="r">知識卡</th><th class="r">獲利</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${me&&String(r.cls)===String(me.cls)&&String(r.seat)===String(me.seat)?'me':''}"><td class="rank">${i+1}</td><td>${esc(r.cls)}-${esc(r.seat)}</td><td>${esc(r.nick)}</td><td>${esc(r.nation||'')}</td><td class="r">${esc(r.cards||0)}</td><td class="r"><b>${fmt(Number(r.profit)||0)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="note">還沒有成績。完成一次航程後就會出現在這裡。</div>';
+  }
+  const src=boardSrc==='online'?'線上排行榜（每位同學取最好的一次）':'這台裝置上的排行榜'+(CFG.GAS_URL?'（連不上線上排行榜）':'（尚未設定線上排行榜網址）');
+  $('#boardSheet').innerHTML=`<div class="sheet-head"><div><h2>排行榜</h2><div class="sub">${src}</div></div><button class="chip-btn close" data-act="close">關閉</button></div>
+    <div class="tabs">${me?`<button data-tab="class" class="${boardTab==='class'?'on':''}">本班 ${esc(me.cls)}</button>`:''}<button data-tab="all" class="${boardTab==='all'?'on':''}">全部</button></div>
+    <div class="sheet-body">${list}</div>`;
+}
+$('#boardSheet').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.tab){boardTab=b.dataset.tab;renderBoard();return;}
+  if(b.dataset.act==='close'){$('#board').hidden=true;modal=screen==='play'?null:modal==='board'?null:modal;if(screen==='end')modal=null;}
+});
+
+/* =================== 開始畫面 =================== */
+let chosenNation='pt';
+const NATION_CARDS=[
+  {id:'pt',home:'里斯本',text:'最早繞過非洲到亞洲的國家。在印度果亞、麻六甲、澳門都有據點。'},
+  {id:'es',home:'塞維亞',text:'擁有美洲的白銀，用大帆船跨越太平洋到馬尼拉。1626 年占領北臺灣雞籠。'},
+  {id:'nl',home:'阿姆斯特丹',text:'新興的海上強國，成立東印度公司。總部在巴達維亞，1624 年來到臺灣大員。'},
+];
+function renderNations(){
+  $('#nations').innerHTML=NATION_CARDS.map(n=>`<button class="nation" data-n="${n.id}" aria-pressed="${chosenNation===n.id}"><b><span class="dot" style="background:var(--${n.id})"></span>${NATION[n.id].name}</b><span>從${n.home}出航。${n.text}</span></button>`).join('');
+}
+$('#nations').addEventListener('click',e=>{const b=e.target.closest('[data-n]');if(!b)return;chosenNation=b.dataset.n;renderNations();});
+const BAD_WORDS=['幹','靠北','白痴','白癡','智障','屁','死','笨蛋','fuck','shit'];
+function readPlayer(){
+  const cls=$('#pCls').value.trim(), seat=$('#pSeat').value.trim(), nick=$('#pNick').value.trim().replace(/\s+/g,'');
+  for(const id of['pCls','pSeat','pNick'])$('#'+id).classList.remove('err');
+  let err='';
+  if(!/^[1-6](0[1-9]|[1-9][0-9])$/.test(cls)){err='班級請輸入三碼數字，例如 501（年級 1–6 加上班號）。';$('#pCls').classList.add('err');}
+  else if(!/^[0-9]{1,2}$/.test(seat)||+seat<1||+seat>40){err='座號請輸入 1 到 40。';$('#pSeat').classList.add('err');}
+  else if(!nick){err='請幫你的船長取一個綽號。';$('#pNick').classList.add('err');}
+  else if(BAD_WORDS.some(w=>nick.toLowerCase().includes(w))){err='換一個友善的綽號吧！';$('#pNick').classList.add('err');}
+  $('#pErr').textContent=err;
+  return err?null:{cls,seat:String(+seat),nick:nick.slice(0,8)};
+}
+function beginPlay(){
+  screen='play';modal=null;
+  $('#start').hidden=true;$('#hud').hidden=false;$('#ctrl').hidden=false;
+  trail=[[S.lon,S.lat]];
+  updateHUD(true);
+}
+$('#bStart').onclick=()=>{
+  const pl=readPlayer();if(!pl)return;
+  S=newState(pl,chosenNation);save();
+  beginPlay();
+  const home=PORTS[S.lastPort];
+  setTimeout(()=>openEvent(`${dateStr(0)}・${home.name}`,`船長 ${pl.nick}，你的船已經準備好了！現在是春天，往南航行，乘著東北信風沿非洲海岸前進，繞過好望角就能到達印度洋。目標：三年內賺最多錢，並收集各地的知識卡。小提示：點海圖上的港口可以設定目的地。`,[{label:'揚帆出航！'}]),200);
+};
+$('#bResume').onclick=()=>{const s=lsGet(CFG.SAVE_KEY);if(!s)return;S=s;if(!S.press)S.press=PORTS.map(()=>GOODS.map(()=>0));beginPlay();toast('歡迎回來，船長！繼續你的航程。');};
+$('#bBoard1').onclick=()=>{
+  // 開始畫面也能看排行榜
+  const pl={cls:$('#pCls').value.trim()};
+  boardData=null;modal='board';
+  boardTab='all';
+  (async()=>{renderBoard();$('#board').hidden=false;let rows=null;if(CFG.GAS_URL){try{const r=await fetch(CFG.GAS_URL+'?action=list');const j=await r.json();if(Array.isArray(j.rows)){rows=j.rows;boardSrc='online';}}catch(e){}}if(!rows){rows=lsGet(CFG.BOARD_KEY)||[];boardSrc='local';}boardData=rows;renderBoard();})();
+};
+(function initStart(){
+  renderNations();
+  const s=lsGet(CFG.SAVE_KEY);
+  if(s&&!s.ended&&s.player){const b=$('#bResume');b.hidden=false;b.textContent=`繼續航程（${s.player.cls}-${s.player.seat} ${s.player.nick}・${dateStr(s.day)}）`;
+    $('#pCls').value=s.player.cls;$('#pSeat').value=s.player.seat;$('#pNick').value=s.player.nick;chosenNation=s.nation;renderNations();}
+})();
+
+/* =================== 主迴圈 =================== */
+readColors();resize();
+window.addEventListener('resize',resize);
+let last=performance.now(),saveAt=0;
+function frame(t){
+  const dt=Math.min(.05,(t-last)/1000);last=t;
+  if(running()){update(dt);updateHUD();if(t-saveAt>4000){saveAt=t;save();}}
+  else if(S&&screen==='play')updateHUD();
+  draw(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+document.fonts&&document.fonts.ready.then(()=>{FONT=null;DFONT=null;});
+</script>
+
+</body>
+</html>
