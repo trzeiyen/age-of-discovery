@@ -219,6 +219,21 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
 .board td.r{text-align:right} .board th.r{text-align:right}
 .board tr.me td{background:rgba(227,168,60,.14)}
 .rank{font-family:var(--f-display);font-weight:900;color:var(--brass)}
+.endsec{display:flex;flex-direction:column;gap:10px}
+.endsec h3{margin:0;font-family:var(--f-display);font-size:20px;font-weight:900}
+.best{background:var(--vellum);color:var(--vellum-ink);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px}
+.best .lbl{color:#6d5a3a}
+.best p{margin:0;line-height:1.75;font-size:15px}
+.best.none p{font-size:15px}
+.best-row{display:flex;align-items:center;gap:10px}
+.best-good{font-family:var(--f-display);font-size:24px;font-weight:900}
+.best-profit{margin-left:auto;font-family:var(--f-display);font-size:30px;font-weight:900;color:#2f7a4f;font-variant-numeric:tabular-nums}
+.best-why{font-size:13px!important;color:#6d5a3a}
+.footmap{display:block;width:100%;max-width:100%;border-radius:12px;border:1px solid var(--line)}
+.route{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 4px;align-items:center}
+.route li{display:flex;flex-direction:column;align-items:center;background:var(--sea-deep);border:1px solid var(--line);border-radius:10px;padding:6px 10px;line-height:1.3}
+.route li small{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.route li.arr{background:none;border:0;padding:0 2px;color:var(--brass);font-size:18px}
 .reflect{margin:0;padding-left:1.3em;line-height:1.9}
 
 @media (max-width:760px){
@@ -561,6 +576,7 @@ const LAND = [
 ];
 const LAND_BB = LAND.map(poly=>{let a=1e9,b=-1e9,c=1e9,d=-1e9;for(const[x,y]of poly){a=Math.min(a,x);b=Math.max(b,x);c=Math.min(c,y);d=Math.max(d,y);}return[a,b,c,d];});
 const LAND_PATHS = LAND.map(poly=>{const p=new Path2D();poly.forEach(([x,y],i)=>i?p.lineTo(x,y):p.moveTo(x,y));p.closePath();return p;});
+const LAND_ALL = (()=>{const p=new Path2D();for(const q of LAND_PATHS)p.addPath(q);return p;})();
 
 /* =================== 工具 =================== */
 const $ = s => document.querySelector(s);
@@ -654,7 +670,8 @@ function newState(player,nation){
   return {v:1,player,nation,day:0,lon:hp.lon,lat:hp.lat,heading:225,sail:.6,
     gold:CFG.START_GOLD,cargo:{},supplies:100,hull:100,
     visited:{},quiz:{},concepts:{},flags:{},daysAtSea:0,distNm:0,
-    press:PORTS.map(()=>GOODS.map(()=>0)),lastPort:PI_[home],target:null,ended:false,submitted:false,trades:0};
+    press:PORTS.map(()=>GOODS.map(()=>0)),lastPort:PI_[home],target:null,ended:false,submitted:false,trades:0,
+    route:[{p:PI_[home],d:0}],path:[[hp.lon,hp.lat]],pathAcc:0,sales:{},best:null};
 }
 function save(){ if(S) lsSet(CFG.SAVE_KEY,S); }
 function cargoUsed(){let n=0;for(const k in S.cargo)n+=S.cargo[k].n;return n;}
@@ -685,22 +702,30 @@ function doBuy(pi,gi,n){
     if(cargoUsed()>=CFG.CARGO_MAX)break;
     const pr=priceBuy(pi,gi); if(pr==null||S.gold<pr)break;
     S.gold-=pr; spent+=pr;
-    const c=S.cargo[g.id]||(S.cargo[g.id]={n:0,cost:0}); c.n++; c.cost+=pr;
+    const c=S.cargo[g.id]||(S.cargo[g.id]={n:0,cost:0,from:pi}); if(c.n>0&&c.from!==pi)c.mixed=true; if(c.n===0)c.from=pi; c.n++; c.cost+=pr;
     S.press[pi][gi]=Math.min(.8,S.press[pi][gi]+.012); done++;
   }
   if(done){S.trades++;}
   return {done,spent};
 }
 function doSell(pi,gi,n){
-  const g=GOODS[gi],c=S.cargo[g.id];let done=0,got=0;
+  const g=GOODS[gi],c=S.cargo[g.id];let done=0,got=0,costSum=0;
   if(!c)return {done,got};
+  const from=c.from,mixed=!!c.mixed;
   for(let i=0;i<n&&c.n>0;i++){
     const pr=priceSell(pi,gi); if(pr==null)break;
-    c.cost-=c.cost/c.n; c.n--; S.gold+=pr; got+=pr;
+    const unit=c.cost/c.n; costSum+=unit;
+    c.cost-=unit; c.n--; S.gold+=pr; got+=pr;
     S.press[pi][gi]=Math.max(-.6,S.press[pi][gi]-.012); done++;
   }
   if(c.n<=0) delete S.cargo[g.id];
-  if(done){S.trades++;}
+  if(done){
+    S.trades++;
+    const profit=Math.round(got-costSum);
+    S.sales=S.sales||{};const t=S.sales[g.id]||(S.sales[g.id]={n:0,got:0,profit:0});t.n+=done;t.got+=got;t.profit+=profit;
+    const trade={g:g.id,from,mixed,to:pi,n:done,buy:Math.round(costSum/done),sell:Math.round(got/done),profit,day:Math.floor(S.day)};
+    if(!S.best||profit>S.best.profit)S.best=trade;
+  }
   return {done,got};
 }
 
@@ -730,6 +755,8 @@ function update(dt){
   }
   trailAcc+=dDays;
   if(trailAcc>.4){trailAcc=0;trail.push([S.lon,S.lat]);if(trail.length>500)trail.shift();}
+  S.pathAcc=(S.pathAcc||0)+dDays;
+  if(S.pathAcc>=2){S.pathAcc=0;(S.path||(S.path=[])).push([Math.round(S.lon*10)/10,Math.round(S.lat*10)/10]);}
   // 日期
   const before=Math.floor(S.day);
   S.day+=dDays;
@@ -812,7 +839,7 @@ function shipwreck(){
   let lost=cargoUsed(); S.cargo={};
   const p=PORTS[S.lastPort];
   S.lon=p.lon;S.lat=p.lat;S.hull=60;S.supplies=Math.max(S.supplies,60);S.daysAtSea=0;S.flags.scurvy=0;
-  S.day=Math.min(S.day+20,CFG.TOTAL_DAYS-1); trail=[];
+  S.day=Math.min(S.day+20,CFG.TOTAL_DAYS-1); trail=[]; (S.path||(S.path=[])).push(null,[p.lon,p.lat]);
   openEvent('船難！','船體撐不住，在海上解體了。船員被路過的船救起，花了 20 天才回到上一個港口「'+p.name+'」。'+(lost?`船上 ${lost} 箱貨物全部沉入海底。`:'')+'重新修好的舊船只剩 60% 船體。',[{label:'重新出發'}]);
 }
 function unlockConcept(id,quiet){
@@ -823,7 +850,8 @@ function unlockConcept(id,quiet){
 }
 
 /* =================== 繪圖 =================== */
-const cv=$('#map'), ctx=cv.getContext('2d');
+const cv=$('#map'), mainCtx=cv.getContext('2d');
+let ctx=mainCtx;
 let W=0,H=0,DPR=1;
 const COL={};
 function readColors(){const cs=getComputedStyle(document.documentElement);for(const k of['sea','sea-deep','sea-line','vellum','vellum-ink','brass','text','muted','good','bad','pt','es','nl','jp','local','none'])COL[k]=cs.getPropertyValue('--'+k).trim();}
@@ -833,16 +861,18 @@ let cam={lon:-10,lat:38,k:20};
 const REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function toScreen(lon,lat){let dx=wrapLon(lon-cam.lon);return [W/2+dx*cam.k,H/2-(lat-cam.lat)*cam.k];}
 
-function draw(t){
-  const st=S||{lon:-14,lat:34,heading:225,day:60};
-  const k=zoomK(); cam.k=k; cam.lon=st.lon;
-  const halfH=H/2/k; const lo=-62+halfH, hi=74-halfH;
-  cam.lat=lo<hi?clamp(st.lat,lo,hi):6;
-  ctx.setTransform(DPR,0,0,DPR,0,0);
+/* 底圖（海、經緯線、陸地）畫在比螢幕大一圈的快取畫布上，船移動時直接平移，跑出範圍才重畫，平板比較不吃力 */
+const BASE={c:document.createElement('canvas'),lon:0,lat:0,k:0,W:0,H:0,M:240,dpr:1};
+function bakeBase(k){
+  const M=BASE.M, dpr=Math.min(DPR,1.5), bw=W+2*M, bh=H+2*M;
+  const c=BASE.c; if(c.width!==Math.round(bw*dpr)||c.height!==Math.round(bh*dpr)){c.width=Math.round(bw*dpr);c.height=Math.round(bh*dpr);}
+  const sv={ctx,W,H,DPR};
+  ctx=c.getContext('2d');W=bw;H=bh;DPR=dpr;
+  try{
+    ctx.setTransform(DPR,0,0,DPR,0,0);
   // 海
-  const g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.75);
-  g.addColorStop(0,COL.sea);g.addColorStop(1,COL['sea-deep']);
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=COL.sea;ctx.fillRect(0,0,W,H);
+  if(TEX.seaPat){anchorPattern(TEX.seaPat,512,k,.6);ctx.fillStyle=TEX.seaPat;ctx.fillRect(0,0,W,H);}
   // 羅盤恆向線
   if(zoomIdx<2){
     for(const[rl,rt]of[[-38,28],[68,-28],[160,18],[-150,-20],[-30,-30],[100,40]]){
@@ -860,24 +890,52 @@ function draw(t){
   for(const[lat,name,dash]of[[0,'赤道',[10,6]],[23.44,'北回歸線',[3,6]],[-23.44,'南回歸線',[3,6]]]){
     const y=H/2-(lat-cam.lat)*k; if(y<0||y>H)continue;
     ctx.strokeStyle=lat===0?'rgba(227,168,60,.45)':'rgba(227,168,60,.28)';ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle='rgba(227,168,60,.75)';ctx.fillText(name,12,y-3);
   }
-  // 風
-  drawWind(t,st.day||0);
   // 陸地
   for(const off of[-360,0,360]){
     const ox=W/2+(off-cam.lon)*k;
     if(ox+180*k<-10||ox-180*k>W+10)continue;
     ctx.setTransform(DPR*k,0,0,-DPR*k,DPR*ox,DPR*(H/2+cam.lat*k));
-    ctx.lineJoin='round';
-    ctx.strokeStyle='rgba(120,170,165,.18)';ctx.lineWidth=7/k;
-    for(const p of LAND_PATHS)ctx.stroke(p);
-    ctx.fillStyle=COL.vellum;
-    for(const p of LAND_PATHS)ctx.fill(p);
-    ctx.strokeStyle=COL['vellum-ink'];ctx.lineWidth=1.3/k;
-    for(const p of LAND_PATHS)ctx.stroke(p);
+    ctx.lineJoin='round';ctx.lineCap='butt';
+    // 淺海：沿岸一圈圈由淺到深
+    const shallow=zoomIdx===2?[[10,.07],[5,.1]]:[[26,.05],[15,.07],[7,.1]];
+    for(const[w,a]of shallow){ctx.strokeStyle=`rgba(135,200,190,${a})`;ctx.lineWidth=w/k;ctx.stroke(LAND_ALL);}
+    // 古地圖的海岸排線
+    if(zoomIdx<2){ctx.setLineDash([1.1/k,3.2/k]);ctx.strokeStyle='rgba(200,230,220,.22)';ctx.lineWidth=12/k;ctx.stroke(LAND_ALL);ctx.setLineDash([]);}
+    ctx.fillStyle=COL.vellum;ctx.fill(LAND_ALL);
+    // 羊皮紙紋理與燒焦般的內緣
+    ctx.save();ctx.clip(LAND_ALL);
+    ctx.strokeStyle='rgba(120,78,30,.16)';ctx.lineWidth=14/k;ctx.stroke(LAND_ALL);
+    ctx.strokeStyle='rgba(120,78,30,.14)';ctx.lineWidth=5/k;ctx.stroke(LAND_ALL);
+    if(TEX.paperPat){ctx.setTransform(DPR,0,0,DPR,0,0);anchorPattern(TEX.paperPat,256,k,1);ctx.fillStyle=TEX.paperPat;ctx.fillRect(0,0,W,H);}
+    ctx.restore();
+    ctx.strokeStyle='#3d2c16';ctx.lineWidth=1.4/k;ctx.stroke(LAND_ALL);
   }
   ctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  } finally { ctx=sv.ctx;W=sv.W;H=sv.H;DPR=sv.DPR; }
+  BASE.lon=cam.lon;BASE.lat=cam.lat;BASE.k=k;BASE.W=sv.W;BASE.H=sv.H;BASE.dpr=dpr;
+}
+function draw(t){
+  const st=S||{lon:-14,lat:34,heading:225,day:60};
+  const k=zoomK(); cam.k=k; cam.lon=st.lon;
+  const halfH=H/2/k; const lo=-62+halfH, hi=74-halfH;
+  cam.lat=lo<hi?clamp(st.lat,lo,hi):6;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  // 底圖快取
+  let dx=wrapLon(cam.lon-BASE.lon)*k, dy=(cam.lat-BASE.lat)*k;
+  if(BASE.k!==k||BASE.W!==W||BASE.H!==H||Math.abs(dx)>BASE.M-8||Math.abs(dy)>BASE.M-8){bakeBase(k);dx=0;dy=0;}
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.drawImage(BASE.c,-BASE.M-dx,-BASE.M+dy,W+2*BASE.M,H+2*BASE.M);
+  // 四周暗角
+  const vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.25,W/2,H/2,Math.max(W,H)*.75);
+  vg.addColorStop(0,'rgba(9,29,36,0)');vg.addColorStop(1,'rgba(9,29,36,.7)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  // 赤道、回歸線名稱
+  ctx.font='500 12px '+getFont();ctx.textAlign='left';ctx.textBaseline='bottom';ctx.fillStyle='rgba(227,168,60,.75)';
+  for(const[lat,name]of[[0,'赤道'],[23.44,'北回歸線'],[-23.44,'南回歸線']]){const y=H/2-(lat-cam.lat)*k;if(y>14&&y<H)ctx.fillText(name,12,y-3);}
+  // 風
+  drawWind(t,st.day||0);
   // 地名
   drawLabels();
   // 航跡
@@ -894,6 +952,41 @@ function draw(t){
   if(S){const[sx,sy]=toScreen(S.lon,S.lat);drawShip(sx,sy,S.heading,zoomIdx===2?14:20,t);drawTarget(sx,sy);}
 }
 let DFONT=null;function getDFont(){return DFONT||(DFONT=getComputedStyle(document.documentElement).getPropertyValue('--f-display'));}
+/* 海圖質感：開場時用程式畫好可無縫拼貼的紋理，之後每一格畫面重複使用 */
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function makeTile(size,seed,paint){
+  const c=document.createElement('canvas');c.width=c.height=size;const g=c.getContext('2d');const r=mulberry(seed);
+  const wrap=(fn)=>{for(const dx of[-size,0,size])for(const dy of[-size,0,size])fn(dx,dy);};
+  paint(g,r,wrap,size);return c;
+}
+const TEX={};
+function buildTextures(){
+  // 羊皮紙：斑駁污漬、纖維、細點
+  TEX.paper=makeTile(256,7,(g,r,wrap,N)=>{
+    for(let i=0;i<46;i++){const x=r()*N,y=r()*N,rad=8+r()*46,a=.025+r()*.06,dark=r()<.7;
+      wrap((dx,dy)=>{const gr=g.createRadialGradient(x+dx,y+dy,0,x+dx,y+dy,rad);gr.addColorStop(0,dark?`rgba(120,82,38,${a})`:`rgba(255,250,230,${a*1.4})`);gr.addColorStop(1,'rgba(120,82,38,0)');g.fillStyle=gr;g.fillRect(x+dx-rad,y+dy-rad,rad*2,rad*2);});}
+    g.lineCap='round';
+    for(let i=0;i<140;i++){const x=r()*N,y=r()*N,l=3+r()*10,a=r()*Math.PI;
+      g.strokeStyle=`rgba(110,78,40,${.05+r()*.07})`;g.lineWidth=.6;wrap((dx,dy)=>{g.beginPath();g.moveTo(x+dx,y+dy);g.lineTo(x+dx+Math.cos(a)*l,y+dy+Math.sin(a)*l);g.stroke();});}
+    for(let i=0;i<900;i++){g.fillStyle=`rgba(90,60,30,${r()*.12})`;g.fillRect(r()*N,r()*N,1,1);}
+  });
+  // 海面水彩：深淺不一的暈染
+  TEX.sea=makeTile(512,11,(g,r,wrap,N)=>{
+    for(let i=0;i<34;i++){const x=r()*N,y=r()*N,rad=40+r()*120,light=r()<.55,a=light?.035+r()*.05:.05+r()*.07;
+      wrap((dx,dy)=>{const gr=g.createRadialGradient(x+dx,y+dy,0,x+dx,y+dy,rad);gr.addColorStop(0,light?`rgba(120,190,185,${a})`:`rgba(2,14,20,${a})`);gr.addColorStop(.7,light?`rgba(120,190,185,${a*.4})`:`rgba(2,14,20,${a*.4})`);gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(x+dx-rad,y+dy-rad,rad*2,rad*2);});}
+    // 水彩乾掉時的邊緣痕跡
+    for(let i=0;i<14;i++){const x=r()*N,y=r()*N,rad=30+r()*90;g.strokeStyle=`rgba(160,210,200,${.018+r()*.02})`;g.lineWidth=1.2;
+      wrap((dx,dy)=>{g.beginPath();for(let k=0;k<=24;k++){const a=k/24*Math.PI*2,rr=rad*(.85+.3*Math.sin(a*3+i));const px=x+dx+Math.cos(a)*rr,py=y+dy+Math.sin(a)*rr*.7;k?g.lineTo(px,py):g.moveTo(px,py);}g.stroke();});}
+  });
+  TEX.paperPat=ctx.createPattern(TEX.paper,'repeat');
+  TEX.seaPat=ctx.createPattern(TEX.sea,'repeat');
+}
+function anchorPattern(pat,size,k,scale){
+  // 讓紋理跟著地圖移動（以經緯度定位），不會黏在螢幕上
+  if(!pat||!pat.setTransform||typeof DOMMatrix==='undefined')return;
+  const wx=(-cam.lon*k*scale)%size, wy=(cam.lat*k*scale)%size;
+  pat.setTransform(new DOMMatrix([1,0,0,1,W/2+wx,H/2+wy]));
+}
 let FONT=null;function getFont(){return FONT||(FONT=getComputedStyle(document.documentElement).getPropertyValue('--f-body'));}
 function drawRose(x,y,r){
   ctx.save();ctx.translate(x,y);
@@ -1137,6 +1230,7 @@ function openPort(pi){
   const r=REL[relation(p.nat)];
   const fee=Math.min(r.fee,S.gold); S.gold-=fee;
   S.daysAtSea=0; S.flags.scurvy=0; S.flags.lowSup=0; S.lastPort=pi;
+  S.route=S.route||[]; if(!S.route.length||S.route[S.route.length-1].p!==pi)S.route.push({p:pi,d:Math.floor(S.day)});
   const first=!S.visited[pi]; S.visited[pi]=1;
   if(S.target===pi) S.target=null;
   portIdx=pi; portTab=first?'story':((p.supplyOnly||S.hull<60||S.supplies<30)?'service':'market'); quizOrder=null;
@@ -1332,6 +1426,62 @@ async function submitScore(){
   } else submitState='local';
   renderEnd();
 }
+function portName(i){return i!=null&&PORTS[i]?PORTS[i].name:'?';}
+function monthStr(d){const o=dateOf(d);return `${o.y}年${o.m}月`;}
+function bestTradeHTML(){
+  const b=S.best;
+  if(!b||b.profit<=0) return `<div class="best none"><span class="lbl">最佳交易</span><p>這趟航程沒有賺到錢的交易。下次試試看：在<b>出產的港口</b>便宜買進，再運到<b>最需要它的地方</b>賣出！</p></div>`;
+  const g=GOODS[GI[b.g]];
+  return `<div class="best"><span class="lbl">最佳交易・${monthStr(b.day)}</span>
+    <div class="best-row"><span class="sw" style="background:${g.col}"></span><b class="best-good">${g.name}</b><span class="best-profit">+${fmt(b.profit)}</span></div>
+    <p>${b.mixed?'在幾個港口':`在<b>${esc(portName(b.from))}</b>`}以每箱約 ${fmt(b.buy)} 金幣買進，運到<b>${esc(portName(b.to))}</b>，以每箱 ${fmt(b.sell)} 金幣賣出 ${b.n} 箱。</p>
+    <p class="best-why">同一種商品，在產地便宜、在遠方昂貴，這就是商人願意冒險遠航的原因。</p></div>`;
+}
+function routeHTML(){
+  const r=(S.route||[]);
+  if(r.length<=1) return '<p class="note">這趟航程還沒有進入其他港口。</p>';
+  return `<ol class="route">${r.map((x,i)=>`<li><b>${esc(portName(x.p))}</b><small>${i===0?'出發':monthStr(x.d)}</small></li>`).join('<li class="arr" aria-hidden="true">›</li>')}</ol>
+    <p class="note">共停靠 ${r.length-1} 次港口，造訪 ${Object.keys(S.visited).length} 個不同的港口。</p>`;
+}
+function salesHTML(){
+  const rows=Object.entries(S.sales||{}).map(([id,v])=>({g:GOODS[GI[id]],...v})).sort((a,b)=>b.profit-a.profit);
+  if(!rows.length) return '';
+  return `<section class="endsec"><h3>我賣了什麼</h3><div style="overflow-x:auto"><table class="board"><thead><tr><th>商品</th><th class="r">賣出箱數</th><th class="r">收入</th><th class="r">獲利</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td><span class="sw" style="background:${r.g.col};display:inline-block;vertical-align:-2px;margin-right:8px"></span>${r.g.name}</td><td class="r">${r.n}</td><td class="r">${fmt(r.got)}</td><td class="r"><b class="${r.profit>=0?'up':'down'}">${r.profit>=0?'+':''}${fmt(r.profit)}</b></td></tr>`).join('')}
+  </tbody></table></div></section>`;
+}
+function drawFootprint(){
+  const c=$('#footMap'); if(!c) return;
+  const w=c.clientWidth,h=Math.round(w/2.3),dpr=Math.min(2,window.devicePixelRatio||1);
+  c.style.height=h+'px';c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);
+  const g=c.getContext('2d');
+  const LON0=-180,LON1=180,LAT0=-58,LAT1=72,sx=w/(LON1-LON0),sy=h/(LAT1-LAT0);
+  const X=lon=>(lon-LON0)*sx, Y=lat=>(LAT1-lat)*sy;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle=COL.sea;g.fillRect(0,0,w,h);
+  g.save();g.setTransform(dpr*sx,0,0,-dpr*sy,dpr*X(0),dpr*Y(0));
+  g.fillStyle=COL.vellum;g.fill(LAND_ALL);g.strokeStyle='#3d2c16';g.lineWidth=.6/sx;g.stroke(LAND_ALL);g.restore();
+  // 路線
+  g.strokeStyle=COL.brass;g.lineWidth=2;g.lineJoin='round';g.lineCap='round';g.setLineDash([5,4]);g.beginPath();
+  let prev=null;
+  for(const pt of(S.path||[])){
+    if(!pt){prev=null;continue;}
+    const x=X(wrapLon(pt[0])),y=Y(pt[1]);
+    if(!prev||Math.abs(x-prev[0])>w/2)g.moveTo(x,y);else g.lineTo(x,y);prev=[x,y];
+  }
+  const ex=X(wrapLon(S.lon)),ey=Y(S.lat);if(prev&&Math.abs(ex-prev[0])<w/2)g.lineTo(ex,ey);
+  g.stroke();g.setLineDash([]);
+  // 港口
+  const visited=new Set((S.route||[]).map(r=>r.p));
+  g.font=`700 ${w<500?10:12}px ${getFont()}`;g.textBaseline='middle';
+  PORTS.forEach((p,i)=>{const x=X(p.lon),y=Y(p.lat),v=visited.has(i);
+    g.fillStyle=v?COL[p.nat]||COL.none:'rgba(74,58,34,.35)';g.beginPath();g.arc(x,y,v?4:2.2,0,Math.PI*2);g.fill();
+    if(v){g.strokeStyle=COL.vellum;g.lineWidth=1.2;g.stroke();}});
+  // 起點與終點
+  const r0=(S.route||[])[0];
+  if(r0){const p=PORTS[r0.p],x=X(p.lon),y=Y(p.lat);g.fillStyle=COL.good;g.beginPath();g.arc(x,y,6,0,Math.PI*2);g.fill();g.fillStyle='#0b2a20';g.textAlign='center';g.fillText('起',x,y+.5);}
+  g.fillStyle=COL.brass;g.beginPath();g.arc(ex,ey,6,0,Math.PI*2);g.fill();g.fillStyle='#2b1d05';g.textAlign='center';g.fillText('終',ex,ey+.5);
+}
 function renderEnd(){
   const profit=Math.round(S.gold-CFG.START_GOLD), left=cargoUsed();
   const msg={uploading:'正在上傳成績…',ok:'成績已上傳到校際挑戰排行榜。',fail:'上傳失敗，成績已存在這台平板上。請告訴老師。',local:S.player.mode==='inter'?'尚未設定線上排行榜，成績先記錄在這台平板上。':'本機挑戰：成績已記錄在這台平板的排行榜。'}[submitState]||'';
@@ -1340,6 +1490,12 @@ function renderEnd(){
       <div><span class="lbl">總獲利</span><div class="big" style="color:${profit>=0?'var(--brass)':'var(--bad)'}">${profit>=0?'+':''}${fmt(profit)}</div></div>
       <div class="statline"><span>最後金幣 <b>${fmt(S.gold)}</b></span><span>知識卡 <b>${cardCount()}/${TOTAL_CARDS}</b></span><span>航行 <b>${fmt(S.distNm)}</b> 海里</span><span>造訪港口 <b>${Object.keys(S.visited).length}</b> 個</span>${left?`<span style="color:var(--bad)">沒賣掉的貨物 <b>${left}</b> 箱</span>`:''}</div>
       <div class="note">${msg}</div>
+      ${bestTradeHTML()}
+      <section class="endsec"><h3>我的足跡</h3>
+        <canvas id="footMap" class="footmap" aria-label="航行路線圖"></canvas>
+        ${routeHTML()}
+      </section>
+      ${salesHTML()}
       <div class="story"><h3>想一想，和同學討論</h3><ol class="reflect">
         <li>歐洲人為什麼願意冒著生命危險，航行半個地球到亞洲？</li>
         <li>荷蘭人為什麼要在大員建立據點？臺灣有哪些商品吸引他們？</li>
@@ -1347,6 +1503,7 @@ function renderEnd(){
       </ol></div>
     </div>
     <div class="sheet-foot"><span class="credit" style="margin-right:auto;align-self:center">遊戲製作：<b>Zeiyen 老師</b></span><button class="btn" data-act="log">我的知識卡</button><button class="btn" data-act="board">排行榜</button><button class="btn primary" data-act="again">再玩一次</button></div>`;
+  requestAnimationFrame(drawFootprint);
 }
 $('#endSheet').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;const a=b.dataset.act;
@@ -1450,7 +1607,7 @@ $('#bStart').onclick=()=>{
   const home=PORTS[S.lastPort];
   setTimeout(()=>openEvent(`${dateStr(0)}・${home.name}`,`船長 ${pl.nick}，你的船已經準備好了！現在是春天，往南航行，乘著東北信風沿非洲海岸前進，繞過好望角就能到達印度洋。目標：三年內賺最多錢，並收集各地的知識卡。小提示：點海圖上的港口可以設定目的地。`,[{label:'揚帆出航！'}]),200);
 };
-$('#bResume').onclick=()=>{const s=lsGet(CFG.SAVE_KEY);if(!s)return;S=s;if(!S.press)S.press=PORTS.map(()=>GOODS.map(()=>0));beginPlay();toast('歡迎回來，船長！繼續你的航程。');};
+$('#bResume').onclick=()=>{const s=lsGet(CFG.SAVE_KEY);if(!s)return;S=s;if(!S.press)S.press=PORTS.map(()=>GOODS.map(()=>0));S.route=S.route||[];S.path=S.path||[];S.sales=S.sales||{};beginPlay();toast('歡迎回來，船長！繼續你的航程。');};
 $('#bBoard1').onclick=()=>{
   // 開始畫面也能看排行榜
   const pl={cls:$('#pCls').value.trim()};
@@ -1618,7 +1775,8 @@ document.querySelectorAll('.music-btn').forEach(b=>b.addEventListener('click',()
 document.addEventListener('visibilitychange',()=>Music.pauseForHidden(document.hidden));
 
 /* =================== 主迴圈 =================== */
-readColors();resize();
+readColors();resize();try{buildTextures();}catch(e){}
+BASE.k=0;
 window.addEventListener('resize',resize);
 let last=performance.now(),saveAt=0;
 function frame(t){
